@@ -1,0 +1,92 @@
+{% extends 'base.html' %}
+{% load humanize money %}
+
+{% block content %}
+  {% if messages %}
+    {% for m in messages %}
+      <div class="mb-4 px-4 py-2 rounded text-sm bg-green-50 text-green-700 border border-green-200">{{ m }}</div>
+    {% endfor %}
+  {% endif %}
+
+  <div class="bg-white rounded-lg border border-slate-200">
+    <div class="flex items-center justify-between p-4 border-b border-slate-200 gap-3">
+      <form method="get" class="flex items-center gap-2 flex-1">
+        <select name="portfolio" class="text-sm border border-slate-300 rounded px-2 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+          <option value="">전체 포트폴리오</option>
+          {% for pf in portfolios %}
+            <option value="{{ pf.pk }}" {% if pf_id == pf.pk|stringformat:"s" %}selected{% endif %}>{{ pf.name }}</option>
+          {% endfor %}
+        </select>
+        <select name="kind" class="text-sm border border-slate-300 rounded px-2 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+          <option value="">전체 종류</option>
+          {% for val, label in kind_choices %}
+            <option value="{{ val }}" {% if kind == val %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+        <button type="submit" class="text-sm px-3 py-2 bg-slate-100 hover:bg-slate-200 rounded">필터</button>
+        {% if kind or pf_id %}
+          <a href="{% url 'evaluation:product' %}" class="text-xs text-slate-500 hover:underline">초기화</a>
+        {% endif %}
+        <div class="text-xs text-slate-500 ml-2">총 <b>{{ total }}</b>건</div>
+      </form>
+
+      <a href="{% url 'evaluation:product_create' %}"
+         class="text-sm px-3 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 flex items-center gap-1.5">
+        <i class="bi bi-plus-lg"></i> 신규 등록
+      </a>
+    </div>
+
+    <table class="w-full text-sm">
+      <thead class="bg-slate-50 text-xs text-slate-500">
+        <tr>
+          <th class="text-left px-4 py-2 font-medium">코드</th>
+          <th class="text-left px-4 py-2 font-medium">이름</th>
+          <th class="text-left px-4 py-2 font-medium">포트폴리오</th>
+          <th class="text-left px-4 py-2 font-medium">종류</th>
+          <th class="text-right px-4 py-2 font-medium">명목금액</th>
+          <th class="px-4 py-2"></th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-slate-100">
+        {% for p in products %}
+          <tr class="hover:bg-slate-50">
+            <td class="px-4 py-2 font-mono text-xs">
+              <a href="{% url 'evaluation:product_detail' p.pk %}" class="text-blue-600 hover:underline">{{ p.code }}</a>
+            </td>
+            <td class="px-4 py-2">{{ p.name }}</td>
+            <td class="px-4 py-2 text-xs text-slate-600">
+              <a href="{% url 'evaluation:portfolio_detail' p.portfolio.pk %}" class="text-blue-600 hover:underline">{{ p.portfolio.name }}</a>
+            </td>
+            <td class="px-4 py-2">
+              <span class="text-xs px-2 py-0.5 rounded
+                {% if p.kind == 'STOCK' %}bg-blue-100 text-blue-700
+                {% elif p.kind == 'BOND' %}bg-emerald-100 text-emerald-700
+                {% elif p.kind == 'DERIV' %}bg-purple-100 text-purple-700
+                {% elif p.kind == 'PROJECT' %}bg-amber-100 text-amber-700
+                {% else %}bg-slate-100 text-slate-700{% endif %}">
+                {{ p.get_kind_display }}
+              </span>
+            </td>
+            <td class="px-4 py-2 text-right font-mono text-xs">
+              {{ p.notional|floatformat:0|intcomma }}
+              <span class="text-slate-400">({{ p.notional|korean_amount }})</span>
+            </td>
+            <td class="px-4 py-2 text-right whitespace-nowrap">
+              <a href="{% url 'evaluation:product_update' p.pk %}" class="text-xs text-blue-600 hover:underline">수정</a>
+              <form method="post" action="{% url 'evaluation:product_delete' p.pk %}" class="inline"
+                    onsubmit="return confirm('정말 삭제하시겠습니까?\n{{ p.code }}');">
+                {% csrf_token %}
+                <button type="submit" class="text-xs text-red-600 hover:underline ml-2">삭제</button>
+              </form>
+            </td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="6" class="text-center text-slate-400 py-10 text-sm">
+            <i class="bi bi-inbox text-2xl block mb-2"></i>
+            등록된 상품이 없습니다.
+          </td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+{% endblock %}

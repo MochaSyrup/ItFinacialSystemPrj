@@ -1,0 +1,77 @@
+<aside class="w-64 bg-slate-900 text-slate-200 flex flex-col">
+  <div class="h-16 flex items-center gap-2 px-5 border-b border-slate-700">
+    <i class="bi bi-building-fill text-blue-400 text-2xl"></i>
+    <div>
+      <div class="font-bold text-white text-sm">금융 IT 포탈</div>
+      <div class="text-[10px] text-slate-400">Insurance IT Portal</div>
+    </div>
+  </div>
+
+  <nav class="flex-1 overflow-y-auto py-4">
+    <div class="px-5 mb-2 nav-section-title text-slate-500 font-semibold uppercase">
+      인터페이스 통합관리
+    </div>
+    <a href="{% url 'monitoring:dashboard' %}"
+       class="nav-item {% if current_nav == 'dashboard' %}active{% endif %} flex items-center gap-3 px-5 py-2.5 text-sm hover:bg-slate-800">
+      <i class="bi bi-speedometer2"></i><span>모니터링</span>
+    </a>
+    <a href="{% url 'interfaces:list' %}"
+       class="nav-item {% if current_group == 'interface_manage' %}active{% endif %} flex items-center gap-3 px-5 py-2.5 text-sm hover:bg-slate-800">
+      <i class="bi bi-diagram-3"></i><span>인터페이스 관리</span>
+    </a>
+    <a href="{% url 'interfaces:execute' %}"
+       class="nav-item {% if current_group == 'execute' %}active{% endif %} flex items-center gap-3 px-5 py-2.5 text-sm hover:bg-slate-800">
+      <i class="bi bi-arrow-repeat"></i><span>실행 / 재처리</span>
+    </a>
+    <a href="{% url 'interfaces:logs' %}"
+       class="nav-item {% if current_group == 'logs' %}active{% endif %} flex items-center gap-3 px-5 py-2.5 text-sm hover:bg-slate-800">
+      <i class="bi bi-journal-text"></i><span>로그 &amp; 성능</span>
+    </a>
+
+    <div class="px-5 mt-6 mb-2 nav-section-title text-slate-500 font-semibold uppercase">
+      금융상품 평가
+    </div>
+    <a href="{% url 'evaluation:portfolio' %}"
+       class="nav-item {% if current_group == 'portfolio' %}active{% endif %} flex items-center gap-3 px-5 py-2.5 text-sm hover:bg-slate-800">
+      <i class="bi bi-briefcase"></i><span>포트폴리오</span>
+    </a>
+    <a href="{% url 'evaluation:product' %}"
+       class="nav-item {% if current_group == 'product' %}active{% endif %} flex items-center gap-3 px-5 py-2.5 text-sm hover:bg-slate-800">
+      <i class="bi bi-coin"></i><span>금융상품</span>
+    </a>
+    <a href="{% url 'evaluation:risk' %}"
+       class="nav-item {% if current_group == 'risk' %}active{% endif %} flex items-center gap-3 px-5 py-2.5 text-sm hover:bg-slate-800">
+      <i class="bi bi-graph-up-arrow"></i><span>리스크 분석</span>
+    </a>
+
+    <div class="px-5 mt-6 mb-2 nav-section-title text-slate-500 font-semibold uppercase">
+      관리
+    </div>
+    <a href="/admin/" class="nav-item flex items-center gap-3 px-5 py-2.5 text-sm hover:bg-slate-800">
+      <i class="bi bi-people"></i><span>사용자 / 권한</span>
+    </a>
+    <a href="/admin/" class="nav-item flex items-center gap-3 px-5 py-2.5 text-sm hover:bg-slate-800">
+      <i class="bi bi-gear"></i><span>시스템 설정</span>
+    </a>
+  </nav>
+
+  <div class="border-t border-slate-700 p-4 flex items-center gap-3">
+    {% if user.is_authenticated %}
+      <div class="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center text-white text-sm font-bold">
+        {{ user.username|slice:":1"|upper }}
+      </div>
+      <div class="flex-1">
+        <div class="text-sm text-white">{{ user.username }}</div>
+        <div class="text-[11px] text-slate-400">{{ user.email|default:"-" }}</div>
+      </div>
+      <a href="/admin/logout/" class="text-slate-400 hover:text-white"><i class="bi bi-box-arrow-right"></i></a>
+    {% else %}
+      <div class="w-8 h-8 rounded-full bg-slate-600 flex items-center justify-center text-white text-sm font-bold">?</div>
+      <div class="flex-1">
+        <div class="text-sm text-white">게스트</div>
+        <div class="text-[11px] text-slate-400">로그인 필요</div>
+      </div>
+      <a href="/admin/login/" class="text-slate-400 hover:text-white"><i class="bi bi-box-arrow-in-right"></i></a>
+    {% endif %}
+  </div>
+</aside>

@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>보험사 금융 IT 포탈</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" />
+  <script src="https://unpkg.com/htmx.org@1.9.12"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans KR", sans-serif; }
+    .nav-item.active { background-color: #1e40af; color: white; }
+    .nav-item.active .bi { color: white; }
+    .nav-section-title { font-size: 11px; letter-spacing: 0.08em; }
+  </style>
+</head>
+<body class="bg-slate-100 text-slate-800">
+
+  <!-- 전체 레이아웃 -->
+  <div class="flex h-screen overflow-hidden">
+
+    <!-- 왼쪽 사이드바 -->
+    <aside class="w-64 bg-slate-900 text-slate-200 flex flex-col">
+      <!-- 로고 -->
+      <div class="h-16 flex items-center gap-2 px-5 border-b border-slate-700">
+        <i class="bi bi-building-fill text-blue-400 text-2xl"></i>
+        <div>
+          <div class="font-bold text-white text-sm">금융 IT 포탈</div>
+          <div class="text-[10px] text-slate-400">Insurance IT Portal</div>
+        </div>
+      </div>
+
+      <!-- 메뉴 -->
+      <nav class="flex-1 overflow-y-auto py-4">
+        <!-- 시스템 1 -->
+        <div class="px-5 mb-2 nav-section-title text-slate-500 font-semibold uppercase">
+          인터페이스 통합관리
+        </div>
+        <a href="#" class="nav-item active flex items-center gap-3 px-5 py-2.5 text-sm hover:bg-slate-800">
+          <i class="bi bi-speedometer2"></i><span>모니터링</span>
+        </a>
+        <a href="#" class="nav-item flex items-center gap-3 px-5 py-2.5 text-sm hover:bg-slate-800">
+          <i class="bi bi-diagram-3"></i><span>인터페이스 관리</span>
+        </a>
+        <a href="#" class="nav-item flex items-center gap-3 px-5 py-2.5 text-sm hover:bg-slate-800">
+          <i class="bi bi-arrow-repeat"></i><span>실행 / 재처리</span>
+        </a>
+        <a href="#" class="nav-item flex items-center gap-3 px-5 py-2.5 text-sm hover:bg-slate-800">
+          <i class="bi bi-journal-text"></i><span>로그 &amp; 성능</span>
+        </a>
+
+        <!-- 시스템 2 -->
+        <div class="px-5 mt-6 mb-2 nav-section-title text-slate-500 font-semibold uppercase">
+          금융상품 평가
+        </div>
+        <a href="#" class="nav-item flex items-center gap-3 px-5 py-2.5 text-sm hover:bg-slate-800">
+          <i class="bi bi-briefcase"></i><span>포트폴리오</span>
+        </a>
+        <a href="#" class="nav-item flex items-center gap-3 px-5 py-2.5 text-sm hover:bg-slate-800">
+          <i class="bi bi-coin"></i><span>금융상품</span>
+        </a>
+        <a href="#" class="nav-item flex items-center gap-3 px-5 py-2.5 text-sm hover:bg-slate-800">
+          <i class="bi bi-graph-up-arrow"></i><span>리스크 분석</span>
+        </a>
+
+        <!-- 관리 -->
+        <div class="px-5 mt-6 mb-2 nav-section-title text-slate-500 font-semibold uppercase">
+          관리
+        </div>
+        <a href="#" class="nav-item flex items-center gap-3 px-5 py-2.5 text-sm hover:bg-slate-800">
+          <i class="bi bi-people"></i><span>사용자 / 권한</span>
+        </a>
+        <a href="#" class="nav-item flex items-center gap-3 px-5 py-2.5 text-sm hover:bg-slate-800">
+          <i class="bi bi-gear"></i><span>시스템 설정</span>
+        </a>
+      </nav>
+
+      <!-- 하단 사용자 -->
+      <div class="border-t border-slate-700 p-4 flex items-center gap-3">
+        <div class="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center text-white text-sm font-bold">관</div>
+        <div class="flex-1">
+          <div class="text-sm text-white">관리자</div>
+          <div class="text-[11px] text-slate-400">admin@insurer.co.kr</div>
+        </div>
+        <i class="bi bi-box-arrow-right text-slate-400 hover:text-white cursor-pointer"></i>
+      </div>
+    </aside>
+
+    <!-- 오른쪽 메인 -->
+    <main class="flex-1 flex flex-col overflow-hidden">
+
+      <!-- 상단 헤더 -->
+      <header class="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-6">
+        <div>
+          <h1 class="text-lg font-semibold">모니터링</h1>
+          <div class="text-xs text-slate-500">인터페이스 통합관리 / 실시간 현황</div>
+        </div>
+        <div class="flex items-center gap-3">
+          <div class="flex items-center gap-1.5 text-xs px-3 py-1.5 bg-green-100 text-green-700 rounded-full">
+            <span class="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
+            시스템 정상
+          </div>
+          <button class="text-slate-500 hover:text-slate-800"><i class="bi bi-bell text-lg"></i></button>
+          <button class="text-slate-500 hover:text-slate-800"><i class="bi bi-question-circle text-lg"></i></button>
+        </div>
+      </header>
+
+      <!-- 컨텐츠 영역 -->
+      <div class="flex-1 overflow-y-auto p-6">
+
+        <!-- KPI 카드 -->
+        <div class="grid grid-cols-4 gap-4 mb-6">
+          <div class="bg-white rounded-lg p-4 border border-slate-200">
+            <div class="flex items-center justify-between mb-2">
+              <span class="text-xs text-slate-500">등록 인터페이스</span>
+              <i class="bi bi-diagram-3 text-blue-500"></i>
+            </div>
+            <div class="text-2xl font-bold">127</div>
+            <div class="text-xs text-green-600 mt-1">활성 118 / 비활성 9</div>
+          </div>
+          <div class="bg-white rounded-lg p-4 border border-slate-200">
+            <div class="flex items-center justify-between mb-2">
+              <span class="text-xs text-slate-500">오늘 호출</span>
+              <i class="bi bi-activity text-indigo-500"></i>
+            </div>
+            <div class="text-2xl font-bold">24,891</div>
+            <div class="text-xs text-slate-500 mt-1">전일 대비 +8.2%</div>
+          </div>
+          <div class="bg-white rounded-lg p-4 border border-slate-200">
+            <div class="flex items-center justify-between mb-2">
+              <span class="text-xs text-slate-500">실패율</span>
+              <i class="bi bi-exclamation-triangle text-amber-500"></i>
+            </div>
+            <div class="text-2xl font-bold">0.43%</div>
+            <div class="text-xs text-red-600 mt-1">임계치 1.00% 이내</div>
+          </div>
+          <div class="bg-white rounded-lg p-4 border border-slate-200">
+            <div class="flex items-center justify-between mb-2">
+              <span class="text-xs text-slate-500">평균 응답시간</span>
+              <i class="bi bi-stopwatch text-emerald-500"></i>
+            </div>
+            <div class="text-2xl font-bold">142 <span class="text-sm font-normal text-slate-500">ms</span></div>
+            <div class="text-xs text-slate-500 mt-1">SLA 500ms</div>
+          </div>
+        </div>
+
+        <!-- 차트 + 프로토콜 분포 -->
+        <div class="grid grid-cols-3 gap-4 mb-6">
+          <div class="col-span-2 bg-white rounded-lg p-4 border border-slate-200">
+            <div class="flex items-center justify-between mb-4">
+              <h3 class="font-semibold text-sm">시간대별 호출 추이</h3>
+              <select class="text-xs border border-slate-300 rounded px-2 py-1">
+                <option>최근 24시간</option>
+                <option>최근 7일</option>
+              </select>
+            </div>
+            <canvas id="callChart" height="90"></canvas>
+          </div>
+          <div class="bg-white rounded-lg p-4 border border-slate-200">
+            <h3 class="font-semibold text-sm mb-4">프로토콜 분포</h3>
+            <canvas id="protoChart" height="180"></canvas>
+          </div>
+        </div>
+
+        <!-- 최근 실행 로그 -->
+        <div class="bg-white rounded-lg border border-slate-200">
+          <div class="flex items-center justify-between p-4 border-b border-slate-200">
+            <h3 class="font-semibold text-sm">최근 인터페이스 실행</h3>
+            <a href="#" class="text-xs text-blue-600 hover:underline">전체 보기 →</a>
+          </div>
+          <table class="w-full text-sm">
+            <thead class="bg-slate-50 text-xs text-slate-500">
+              <tr>
+                <th class="text-left px-4 py-2 font-medium">시각</th>
+                <th class="text-left px-4 py-2 font-medium">인터페이스</th>
+                <th class="text-left px-4 py-2 font-medium">프로토콜</th>
+                <th class="text-left px-4 py-2 font-medium">대상</th>
+                <th class="text-left px-4 py-2 font-medium">응답</th>
+                <th class="text-left px-4 py-2 font-medium">상태</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100">
+              <tr><td class="px-4 py-2 text-slate-500">14:23:11</td><td class="px-4 py-2">IF_FSS_DAILY_REPORT</td><td class="px-4 py-2"><span class="px-2 py-0.5 text-xs bg-blue-100 text-blue-700 rounded">REST</span></td><td class="px-4 py-2">금감원</td><td class="px-4 py-2">128ms</td><td class="px-4 py-2"><span class="text-green-600"><i class="bi bi-check-circle-fill"></i> 성공</span></td></tr>
+              <tr><td class="px-4 py-2 text-slate-500">14:22:58</td><td class="px-4 py-2">IF_PARTNER_CLAIM</td><td class="px-4 py-2"><span class="px-2 py-0.5 text-xs bg-purple-100 text-purple-700 rounded">SOAP</span></td><td class="px-4 py-2">제휴사 A</td><td class="px-4 py-2">342ms</td><td class="px-4 py-2"><span class="text-green-600"><i class="bi bi-check-circle-fill"></i> 성공</span></td></tr>
+              <tr><td class="px-4 py-2 text-slate-500">14:22:41</td><td class="px-4 py-2">IF_CORE_POLICY_SYNC</td><td class="px-4 py-2"><span class="px-2 py-0.5 text-xs bg-amber-100 text-amber-700 rounded">MQ</span></td><td class="px-4 py-2">코어시스템</td><td class="px-4 py-2">-</td><td class="px-4 py-2"><span class="text-red-600"><i class="bi bi-x-circle-fill"></i> 실패</span></td></tr>
+              <tr><td class="px-4 py-2 text-slate-500">14:21:30</td><td class="px-4 py-2">IF_SFTP_ACCOUNTING</td><td class="px-4 py-2"><span class="px-2 py-0.5 text-xs bg-emerald-100 text-emerald-700 rounded">SFTP</span></td><td class="px-4 py-2">회계시스템</td><td class="px-4 py-2">1,204ms</td><td class="px-4 py-2"><span class="text-green-600"><i class="bi bi-check-circle-fill"></i> 성공</span></td></tr>
+              <tr><td class="px-4 py-2 text-slate-500">14:20:15</td><td class="px-4 py-2">IF_BATCH_NIGHTLY</td><td class="px-4 py-2"><span class="px-2 py-0.5 text-xs bg-slate-100 text-slate-700 rounded">Batch</span></td><td class="px-4 py-2">정산배치</td><td class="px-4 py-2">4,872ms</td><td class="px-4 py-2"><span class="text-green-600"><i class="bi bi-check-circle-fill"></i> 성공</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+
+      </div>
+    </main>
+  </div>
+
+  <script>
+    // 시간대별 호출 라인 차트
+    new Chart(document.getElementById('callChart'), {
+      type: 'line',
+      data: {
+        labels: ['00','02','04','06','08','10','12','14','16','18','20','22'],
+        datasets: [
+          { label: '성공', data: [420,380,350,410,890,1420,1680,1920,1750,1340,980,620], borderColor: '#3b82f6', backgroundColor: 'rgba(59,130,246,0.1)', fill: true, tension: 0.35 },
+          { label: '실패', data: [2,1,3,2,5,8,6,9,7,4,3,2], borderColor: '#ef4444', backgroundColor: 'rgba(239,68,68,0.1)', fill: true, tension: 0.35 }
+        ]
+      },
+      options: { responsive: true, plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 11 } } } } }
+    });
+
+    // 프로토콜 분포 도넛
+    new Chart(document.getElementById('protoChart'), {
+      type: 'doughnut',
+      data: {
+        labels: ['REST','SOAP','MQ','SFTP','Batch'],
+        datasets: [{ data: [58, 21, 18, 16, 14], backgroundColor: ['#3b82f6','#a855f7','#f59e0b','#10b981','#64748b'] }]
+      },
+      options: { responsive: true, plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 11 } } } } }
+    });
+
+    // 네비 클릭 활성화
+    document.querySelectorAll('.nav-item').forEach(el => {
+      el.addEventListener('click', e => {
+        e.preventDefault();
+        document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+        el.classList.add('active');
+      });
+    });
+  </script>
+</body>
+</html>

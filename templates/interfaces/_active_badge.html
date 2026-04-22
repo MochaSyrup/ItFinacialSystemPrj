@@ -1,0 +1,8 @@
+<button
+  hx-post="{% url 'interfaces:toggle' obj.pk %}"
+  hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
+  hx-swap="outerHTML"
+  class="text-xs px-2 py-0.5 rounded cursor-pointer transition
+    {% if obj.is_active %}bg-green-100 text-green-700 hover:bg-green-200{% else %}bg-slate-200 text-slate-600 hover:bg-slate-300{% endif %}">
+  {% if obj.is_active %}활성{% else %}비활성{% endif %}
+</button>

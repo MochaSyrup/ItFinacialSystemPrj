@@ -1,0 +1,12 @@
+{% extends 'base.html' %}
+
+{% block content %}
+  <div class="bg-white rounded-lg border border-slate-200 p-10 text-center">
+    <div class="inline-flex items-center justify-center w-14 h-14 rounded-full bg-slate-100 text-slate-400 mb-4">
+      <i class="bi {{ placeholder_icon|default:'bi-hourglass-split' }} text-2xl"></i>
+    </div>
+    <h2 class="text-lg font-semibold mb-1">{{ page_title }}</h2>
+    <p class="text-sm text-slate-500 mb-6">{{ page_subtitle }}</p>
+    <p class="text-xs text-slate-400">이 화면은 준비 중입니다. 다음 단계에서 실제 기능이 연결됩니다.</p>
+  </div>
+{% endblock %}

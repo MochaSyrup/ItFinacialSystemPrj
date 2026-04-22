@@ -1,0 +1,123 @@
+{% extends 'base.html' %}
+
+{% block content %}
+  <div class="max-w-2xl">
+    <form method="post" class="bg-white rounded-lg border border-slate-200 p-6 space-y-5">
+      {% csrf_token %}
+
+      {% if form.non_field_errors %}
+        <div class="p-3 text-sm bg-red-50 border border-red-200 text-red-700 rounded">
+          {{ form.non_field_errors }}
+        </div>
+      {% endif %}
+
+      {% for field in form %}
+        {% if field.name == 'is_active' %}
+          <div class="flex items-center gap-2">
+            {{ field }}
+            <label for="{{ field.id_for_label }}" class="text-sm">활성화</label>
+            {% if field.errors %}<span class="text-xs text-red-600">{{ field.errors|striptags }}</span>{% endif %}
+          </div>
+        {% else %}
+          <div {% if field.name == 'schedule_cron' %}id="schedule-cron-wrap"{% endif %}>
+            <label for="{{ field.id_for_label }}" class="block text-xs font-medium text-slate-600 mb-1">
+              {{ field.label }}{% if field.field.required %} <span class="text-red-500">*</span>{% endif %}
+            </label>
+            {{ field }}
+            {% if field.name == 'config_json_text' %}
+              <div class="mt-2 flex items-center gap-2 flex-wrap">
+                <span class="text-[11px] text-slate-500">프로토콜별 예시 채우기:</span>
+                {% for key, hint in protocol_config_hints.items %}
+                  <button type="button"
+                          data-fill-config="{{ key }}"
+                          class="text-[11px] px-2 py-0.5 border border-slate-300 rounded hover:bg-slate-100">
+                    {{ key }}
+                  </button>
+                {% endfor %}
+              </div>
+            {% endif %}
+            {% if field.help_text %}<div class="text-[11px] text-slate-400 mt-1">{{ field.help_text }}</div>{% endif %}
+            {% if field.errors %}<div class="text-xs text-red-600 mt-1">{{ field.errors|striptags }}</div>{% endif %}
+          </div>
+        {% endif %}
+      {% endfor %}
+
+      <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+        <a href="{% url 'interfaces:list' %}" class="text-sm px-4 py-2 text-slate-600 hover:bg-slate-100 rounded">취소</a>
+        <button type="submit" class="text-sm px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
+          {% if mode == 'create' %}등록{% else %}저장{% endif %}
+        </button>
+      </div>
+    </form>
+  </div>
+
+  {{ protocol_config_hints|json_script:"config-hints" }}
+  {{ protocol_operations|json_script:"protocol-ops" }}
+  <script>
+    (function () {
+      const hints = JSON.parse(document.getElementById('config-hints').textContent);
+      const opsByProtocol = JSON.parse(document.getElementById('protocol-ops').textContent);
+      const textarea = document.getElementById('id_config_json_text');
+      const protocolSelect = document.getElementById('id_protocol');
+      const opSelect = document.getElementById('id_operation_type');
+      const cronWrap = document.getElementById('schedule-cron-wrap');
+
+      // operation_type 선택지 전체를 저장 (초기 렌더된 <option> 들)
+      const allOps = Array.from(opSelect ? opSelect.options : []).map(o => ({
+        value: o.value, text: o.textContent
+      }));
+
+      function filterOperations(protocol, keepSelection) {
+        if (!opSelect) return;
+        const allowed = opsByProtocol[protocol] || [];
+        const currentValue = keepSelection ? opSelect.value : '';
+        opSelect.innerHTML = '';
+        const blank = document.createElement('option');
+        blank.value = '';
+        blank.textContent = '---------';
+        opSelect.appendChild(blank);
+        allOps.forEach(function (opt) {
+          if (!opt.value) return;
+          if (allowed.indexOf(opt.value) !== -1) {
+            const el = document.createElement('option');
+            el.value = opt.value;
+            el.textContent = opt.text;
+            if (opt.value === currentValue) el.selected = true;
+            opSelect.appendChild(el);
+          }
+        });
+      }
+
+      function toggleSchedule(protocol) {
+        if (!cronWrap) return;
+        const needsSchedule = (protocol === 'BATCH' || protocol === 'SFTP');
+        cronWrap.style.display = needsSchedule ? '' : 'none';
+      }
+
+      if (protocolSelect) {
+        // 초기 렌더 (저장된 값 유지)
+        filterOperations(protocolSelect.value, true);
+        toggleSchedule(protocolSelect.value);
+
+        protocolSelect.addEventListener('change', function () {
+          filterOperations(protocolSelect.value, false);
+          toggleSchedule(protocolSelect.value);
+        });
+      }
+
+      document.querySelectorAll('[data-fill-config]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          const key = btn.getAttribute('data-fill-config');
+          if (hints[key] && textarea) {
+            textarea.value = hints[key];
+            if (protocolSelect) {
+              protocolSelect.value = key;
+              filterOperations(key, false);
+              toggleSchedule(key);
+            }
+          }
+        });
+      });
+    })();
+  </script>
+{% endblock %}

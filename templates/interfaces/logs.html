@@ -1,0 +1,177 @@
+{% extends 'base.html' %}
+
+{% block content %}
+  <!-- 필터 -->
+  <form method="get" class="bg-white rounded-lg border border-slate-200 p-3 mb-4 flex flex-wrap items-center gap-2">
+    <select name="period" class="text-sm border border-slate-300 rounded px-2 py-1.5">
+      {% for k, label in periods %}
+        <option value="{{ k }}" {% if filters.period == k %}selected{% endif %}>{{ label }}</option>
+      {% endfor %}
+    </select>
+    <select name="interface" class="text-sm border border-slate-300 rounded px-2 py-1.5">
+      <option value="">전체 인터페이스</option>
+      {% for i in interfaces_all %}
+        <option value="{{ i.pk }}" {% if filters.interface == i.pk|stringformat:"s" %}selected{% endif %}>{{ i.code }}</option>
+      {% endfor %}
+    </select>
+    <select name="status" class="text-sm border border-slate-300 rounded px-2 py-1.5">
+      <option value="">전체 상태</option>
+      <option value="SUCCESS" {% if filters.status == 'SUCCESS' %}selected{% endif %}>성공</option>
+      <option value="FAIL" {% if filters.status == 'FAIL' %}selected{% endif %}>실패</option>
+    </select>
+    <button type="submit" class="text-sm px-3 py-1.5 bg-slate-100 hover:bg-slate-200 rounded">필터</button>
+    {% if filters.interface or filters.status or filters.period != '24h' %}
+      <a href="{% url 'interfaces:logs' %}" class="text-xs text-slate-500 hover:underline">초기화</a>
+    {% endif %}
+    <div class="ml-auto text-xs text-slate-500">총 <b class="text-slate-700">{{ kpi.total }}</b>건</div>
+  </form>
+
+  <!-- KPI -->
+  <div class="grid grid-cols-4 gap-4 mb-4">
+    <div class="bg-white rounded-lg p-4 border border-slate-200">
+      <div class="text-xs text-slate-500 mb-1">총 호출</div>
+      <div class="text-2xl font-bold">{{ kpi.total }}</div>
+    </div>
+    <div class="bg-white rounded-lg p-4 border border-slate-200">
+      <div class="text-xs text-slate-500 mb-1">성공</div>
+      <div class="text-2xl font-bold text-green-600">{{ kpi.success }}</div>
+    </div>
+    <div class="bg-white rounded-lg p-4 border border-slate-200">
+      <div class="text-xs text-slate-500 mb-1">실패율</div>
+      <div class="text-2xl font-bold {% if kpi.fail_rate > 1 %}text-red-600{% else %}text-slate-800{% endif %}">{{ kpi.fail_rate }}%</div>
+      <div class="text-xs text-slate-400 mt-0.5">실패 {{ kpi.fail }}건</div>
+    </div>
+    <div class="bg-white rounded-lg p-4 border border-slate-200">
+      <div class="text-xs text-slate-500 mb-1">평균 응답시간</div>
+      <div class="text-2xl font-bold">{{ kpi.avg_latency }} <span class="text-sm font-normal text-slate-500">ms</span></div>
+    </div>
+  </div>
+
+  <!-- 차트 + Top latency -->
+  <div class="grid grid-cols-3 gap-4 mb-4">
+    <div class="col-span-2 bg-white rounded-lg p-4 border border-slate-200">
+      <h3 class="font-semibold text-sm mb-3">시간대별 호출 추이</h3>
+      {% if chart.labels %}
+        <canvas id="hourlyChart" height="80"></canvas>
+      {% else %}
+        <div class="text-center text-xs text-slate-400 py-10">데이터가 없습니다.</div>
+      {% endif %}
+    </div>
+    <div class="bg-white rounded-lg p-4 border border-slate-200">
+      <h3 class="font-semibold text-sm mb-3">평균 응답시간 Top 5</h3>
+      {% if top_latency %}
+        <table class="w-full text-xs">
+          <tbody class="divide-y divide-slate-100">
+            {% for row in top_latency %}
+              <tr>
+                <td class="py-1.5 font-mono text-slate-700">{{ row.interface__code }}</td>
+                <td class="py-1.5 text-right">
+                  <span class="font-bold">{{ row.avg }}</span>
+                  <span class="text-slate-400">ms</span>
+                  <span class="text-slate-400 ml-1">({{ row.n }})</span>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      {% else %}
+        <div class="text-center text-xs text-slate-400 py-6">데이터가 없습니다.</div>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- 로그 목록 -->
+  <div class="bg-white rounded-lg border border-slate-200">
+    <div class="p-4 border-b border-slate-200 flex items-center justify-between">
+      <h3 class="font-semibold text-sm">호출 로그</h3>
+      <div class="text-xs text-slate-400">
+        {{ page_obj.start_index }}–{{ page_obj.end_index }} / {{ page_obj.paginator.count }}
+      </div>
+    </div>
+    <table class="w-full text-sm">
+      <thead class="bg-slate-50 text-xs text-slate-500">
+        <tr>
+          <th class="text-left px-4 py-2 font-medium">시각</th>
+          <th class="text-left px-4 py-2 font-medium">인터페이스</th>
+          <th class="text-left px-4 py-2 font-medium">프로토콜</th>
+          <th class="text-left px-4 py-2 font-medium">상태</th>
+          <th class="text-right px-4 py-2 font-medium">응답시간</th>
+          <th class="text-left px-4 py-2 font-medium">요약</th>
+          <th class="px-4 py-2"></th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-slate-100">
+        {% for log in page_obj %}
+          <tr class="hover:bg-slate-50">
+            <td class="px-4 py-2 text-xs text-slate-500 whitespace-nowrap">{{ log.executed_at|date:"Y-m-d H:i:s" }}</td>
+            <td class="px-4 py-2 font-mono text-xs">{{ log.interface.code }}</td>
+            <td class="px-4 py-2">
+              <span class="text-xs px-1.5 py-0.5 rounded
+                {% if log.interface.protocol == 'REST' %}bg-blue-100 text-blue-700
+                {% elif log.interface.protocol == 'SOAP' %}bg-purple-100 text-purple-700
+                {% elif log.interface.protocol == 'MQ' %}bg-amber-100 text-amber-700
+                {% elif log.interface.protocol == 'SFTP' %}bg-emerald-100 text-emerald-700
+                {% else %}bg-slate-100 text-slate-700{% endif %}">
+                {{ log.interface.get_protocol_display }}
+              </span>
+            </td>
+            <td class="px-4 py-2">
+              {% if log.status == 'SUCCESS' %}
+                <span class="text-xs text-green-600"><i class="bi bi-check-circle-fill"></i> 성공</span>
+              {% else %}
+                <span class="text-xs text-red-600"><i class="bi bi-x-circle-fill"></i> 실패</span>
+              {% endif %}
+            </td>
+            <td class="px-4 py-2 text-right text-xs">{{ log.latency_ms|default:"-" }}{% if log.latency_ms %} ms{% endif %}</td>
+            <td class="px-4 py-2 text-xs text-slate-500 truncate max-w-xs">
+              {% if log.status == 'FAIL' %}<span class="text-red-500">{{ log.error|default:"실패" }}</span>{% else %}{{ log.response_summary|default:"-" }}{% endif %}
+            </td>
+            <td class="px-4 py-2 text-right">
+              <a href="{% url 'interfaces:log_detail' log.pk %}" class="text-xs text-blue-600 hover:underline">상세</a>
+            </td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="7" class="text-center text-slate-400 py-10 text-sm">조건에 맞는 로그가 없습니다.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    {% if page_obj.paginator.num_pages > 1 %}
+      <div class="p-3 border-t border-slate-200 flex items-center justify-center gap-1 text-xs">
+        {% if page_obj.has_previous %}
+          <a href="?{{ base_qs }}&page={{ page_obj.previous_page_number }}" class="px-2 py-1 border border-slate-300 rounded hover:bg-slate-100">이전</a>
+        {% endif %}
+        <span class="px-3 py-1 text-slate-500">{{ page_obj.number }} / {{ page_obj.paginator.num_pages }}</span>
+        {% if page_obj.has_next %}
+          <a href="?{{ base_qs }}&page={{ page_obj.next_page_number }}" class="px-2 py-1 border border-slate-300 rounded hover:bg-slate-100">다음</a>
+        {% endif %}
+      </div>
+    {% endif %}
+  </div>
+{% endblock %}
+
+{% block scripts %}
+  {% if chart.labels %}
+    {{ chart|json_script:"hourly-data" }}
+    <script>
+      (function () {
+        const d = JSON.parse(document.getElementById('hourly-data').textContent);
+        new Chart(document.getElementById('hourlyChart'), {
+          type: 'bar',
+          data: {
+            labels: d.labels,
+            datasets: [
+              { label: '성공', data: d.success, backgroundColor: '#3b82f6', stack: 's' },
+              { label: '실패', data: d.fail,    backgroundColor: '#ef4444', stack: 's' },
+            ]
+          },
+          options: {
+            responsive: true,
+            scales: { x: { stacked: true }, y: { stacked: true, beginAtZero: true } },
+            plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 11 } } } }
+          }
+        });
+      })();
+    </script>
+  {% endif %}
+{% endblock %}

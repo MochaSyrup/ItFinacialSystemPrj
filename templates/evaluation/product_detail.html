@@ -1,0 +1,176 @@
+{% extends 'base.html' %}
+{% load humanize money %}
+
+{% block content %}
+  <div class="mb-3 flex items-center justify-between">
+    <a href="{% url 'evaluation:portfolio_detail' pf.pk %}" class="text-xs text-slate-500 hover:text-slate-800">
+      <i class="bi bi-arrow-left"></i> {{ pf.name }}
+    </a>
+    <div class="flex items-center gap-2">
+      <a href="{% url 'evaluation:product_update' obj.pk %}" class="text-xs px-3 py-1.5 bg-blue-600 text-white rounded hover:bg-blue-700">수정</a>
+    </div>
+  </div>
+
+  <div class="grid grid-cols-5 gap-4 mb-4">
+    <div class="bg-white rounded-lg p-4 border border-slate-200">
+      <div class="text-xs text-slate-500 mb-1">종류</div>
+      <div class="text-lg font-bold">{{ obj.get_kind_display }}</div>
+      <div class="text-[11px] font-mono text-slate-400">{{ obj.code }}</div>
+    </div>
+    <div class="bg-white rounded-lg p-4 border border-slate-200">
+      <div class="text-xs text-slate-500 mb-1">명목금액</div>
+      <div class="text-xl font-bold font-mono">{{ obj.notional|floatformat:0|intcomma }}</div>
+      <div class="text-[11px] text-slate-400">({{ obj.notional|korean_amount }})</div>
+    </div>
+    <div class="bg-white rounded-lg p-4 border border-slate-200">
+      <div class="text-xs text-slate-500 mb-1">평가액</div>
+      <div class="text-xl font-bold font-mono">{{ c.current_value|floatformat:0|intcomma }}</div>
+      <div class="text-[11px] text-slate-400">({{ c.current_value|korean_amount }})</div>
+    </div>
+    <div class="bg-white rounded-lg p-4 border border-slate-200">
+      <div class="text-xs text-slate-500 mb-1">평가손익 (PnL)</div>
+      {% if row and row.pnl is not None %}
+        <div class="text-xl font-bold font-mono {% if row.pnl >= 0 %}text-green-600{% else %}text-red-600{% endif %}">
+          {{ row.pnl|floatformat:0|intcomma }}
+        </div>
+        <div class="text-[11px] text-slate-400">
+          ({{ row.pnl|korean_amount }}) · 장부가 {{ row.book_value|floatformat:0|intcomma }}
+        </div>
+      {% else %}
+        <div class="text-xl font-bold text-slate-400">-</div>
+        <div class="text-[11px] text-slate-400">장부가 미입력</div>
+      {% endif %}
+    </div>
+    <div class="bg-white rounded-lg p-4 border border-slate-200">
+      <div class="text-xs text-slate-500 mb-1">포트폴리오 비중</div>
+      <div class="text-xl font-bold">{{ row.weight_pct|floatformat:1 }}%</div>
+      {% if row.over_limit %}
+        <div class="text-[11px] text-red-600"><i class="bi bi-exclamation-triangle-fill"></i> 한도({{ pf.weight_limit_pct|floatformat:1 }}%) 초과</div>
+      {% else %}
+        <div class="text-[11px] text-slate-400">한도 {{ pf.weight_limit_pct|floatformat:1 }}%</div>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="grid grid-cols-2 gap-4">
+    <!-- 입력값 -->
+    <div class="bg-white rounded-lg border border-slate-200">
+      <div class="p-4 border-b border-slate-200">
+        <h3 class="font-semibold text-sm">입력값</h3>
+        <div class="text-[11px] text-slate-500 mt-1">평가 기준일 {{ pf.valuation_date|default:"(오늘)"|date:"Y-m-d" }}</div>
+      </div>
+      <table class="w-full text-sm">
+        <tbody class="divide-y divide-slate-100">
+          {% for k, v in c.inputs.items %}
+            <tr>
+              <td class="px-4 py-2 text-xs text-slate-500 w-40">{{ k }}</td>
+              <td class="px-4 py-2 font-mono text-xs">
+                {% if v is None %}
+                  <span class="text-slate-400">(미입력)</span>
+                {% else %}
+                  {{ v }}
+                {% endif %}
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <!-- 결과 지표 -->
+    <div class="bg-white rounded-lg border border-slate-200">
+      <div class="p-4 border-b border-slate-200">
+        <h3 class="font-semibold text-sm">계산 결과</h3>
+      </div>
+      <table class="w-full text-sm">
+        <tbody class="divide-y divide-slate-100">
+          {% for k, v in c.metrics.items %}
+            <tr>
+              <td class="px-4 py-2 text-xs text-slate-500 w-40">{{ k }}</td>
+              <td class="px-4 py-2 font-mono text-sm font-semibold">
+                {% if v is None %}-{% else %}{{ v|floatformat:4 }}{% endif %}
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- 계산 근거 -->
+  <div class="bg-white rounded-lg border border-slate-200 mt-4">
+    <div class="p-4 border-b border-slate-200">
+      <h3 class="font-semibold text-sm">계산 근거 (step by step)</h3>
+    </div>
+    <div class="p-4">
+      {% if c.trace %}
+        <ol class="list-decimal list-inside space-y-1 text-xs font-mono text-slate-700">
+          {% for line in c.trace %}
+            <li>{{ line }}</li>
+          {% endfor %}
+        </ol>
+      {% else %}
+        <div class="text-xs text-slate-400">계산 근거가 없습니다.</div>
+      {% endif %}
+    </div>
+  </div>
+
+  {% if obj.kind == 'BOND' or obj.kind == 'PROJECT' %}
+    <!-- 현금흐름 테이블 -->
+    <div class="bg-white rounded-lg border border-slate-200 mt-4">
+      <div class="p-4 border-b border-slate-200">
+        <h3 class="font-semibold text-sm">현금흐름</h3>
+      </div>
+      <table class="w-full text-sm">
+        <thead class="bg-slate-50 text-xs text-slate-500">
+          <tr>
+            <th class="text-left px-4 py-2 font-medium">t (연차)</th>
+            <th class="text-right px-4 py-2 font-medium">CF</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-100">
+          {% for cf in c.cashflows %}
+            <tr>
+              <td class="px-4 py-2 text-xs">{{ forloop.counter0 }}</td>
+              <td class="px-4 py-2 text-right font-mono text-xs">
+                {{ cf|floatformat:0|intcomma }}
+                <span class="text-slate-400">({{ cf|korean_amount }})</span>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% endif %}
+
+  {% if obj.kind == 'STOCK' and c.returns %}
+    <!-- 수익률 시계열 -->
+    <div class="bg-white rounded-lg border border-slate-200 mt-4 p-4">
+      <h3 class="font-semibold text-sm mb-3">수익률 시계열 ({{ c.returns|length }}개)</h3>
+      <div style="height: 220px;"><canvas id="retChart"></canvas></div>
+    </div>
+    {{ c.returns|json_script:"returns-data" }}
+    <script>
+      (function () {
+        const returns = JSON.parse(document.getElementById('returns-data').textContent);
+        new Chart(document.getElementById('retChart'), {
+          type: 'line',
+          data: {
+            labels: returns.map((_, i) => i + 1),
+            datasets: [{
+              label: '일간 수익률',
+              data: returns,
+              borderColor: '#3b82f6',
+              backgroundColor: 'rgba(59,130,246,0.1)',
+              fill: true, tension: 0.2, pointRadius: 2,
+            }],
+          },
+          options: {
+            responsive: true, maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+          },
+        });
+      })();
+    </script>
+  {% endif %}
+{% endblock %}

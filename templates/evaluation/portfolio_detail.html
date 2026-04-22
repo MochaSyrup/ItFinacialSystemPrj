@@ -1,0 +1,117 @@
+{% extends 'base.html' %}
+{% load humanize money %}
+
+{% block content %}
+  <div class="mb-3 flex items-center justify-between">
+    <a href="{% url 'evaluation:portfolio' %}" class="text-xs text-slate-500 hover:text-slate-800">
+      <i class="bi bi-arrow-left"></i> 포트폴리오 목록
+    </a>
+    <div class="text-xs text-slate-500">
+      평가 기준일: <b class="text-slate-700">{{ pf.valuation_date|default:"(오늘)"|date:"Y-m-d" }}</b>
+      · 비중 한도: <b class="text-slate-700">{{ pf.weight_limit_pct|floatformat:1 }}%</b>
+    </div>
+  </div>
+
+  <div class="grid grid-cols-5 gap-4 mb-4">
+    <div class="bg-white rounded-lg p-4 border border-slate-200">
+      <div class="text-xs text-slate-500 mb-1">상품 수</div>
+      <div class="text-2xl font-bold">{{ agg.count }}</div>
+    </div>
+    <div class="bg-white rounded-lg p-4 border border-slate-200">
+      <div class="text-xs text-slate-500 mb-1">총 명목금액</div>
+      <div class="text-2xl font-bold">{{ agg.total_notional|floatformat:0|intcomma }}</div>
+      <div class="text-[11px] text-slate-400">{{ agg.total_notional|korean_amount }} · {{ pf.base_currency }}</div>
+    </div>
+    <div class="bg-white rounded-lg p-4 border border-slate-200">
+      <div class="text-xs text-slate-500 mb-1">총 평가액</div>
+      <div class="text-2xl font-bold">{{ agg.total_current_value|floatformat:0|intcomma }}</div>
+      <div class="text-[11px] text-slate-400">{{ agg.total_current_value|korean_amount }}</div>
+    </div>
+    <div class="bg-white rounded-lg p-4 border border-slate-200">
+      <div class="text-xs text-slate-500 mb-1">총 VaR (95%, 1d)</div>
+      <div class="text-2xl font-bold text-red-600">{{ agg.total_var|floatformat:0|intcomma }}</div>
+      <div class="text-[11px] text-slate-400">{{ agg.total_var|korean_amount }}</div>
+    </div>
+    <div class="bg-white rounded-lg p-4 border border-slate-200">
+      <div class="text-xs text-slate-500 mb-1">총 평가손익</div>
+      <div class="text-2xl font-bold {% if agg.total_pnl >= 0 %}text-green-600{% else %}text-red-600{% endif %}">
+        {{ agg.total_pnl|floatformat:0|intcomma }}
+      </div>
+      <div class="text-[11px] text-slate-400">{{ agg.total_pnl|korean_amount }}</div>
+    </div>
+  </div>
+
+  {% if agg.over_limit_count %}
+    <div class="mb-4 p-3 bg-amber-50 border border-amber-300 text-amber-800 rounded flex items-center gap-2">
+      <i class="bi bi-exclamation-triangle-fill"></i>
+      <div class="text-sm">
+        비중 한도({{ agg.weight_limit_pct|floatformat:1 }}%)를 초과한 상품 <b>{{ agg.over_limit_count }}건</b>이 있습니다.
+      </div>
+    </div>
+  {% endif %}
+
+  <div class="bg-white rounded-lg border border-slate-200">
+    <div class="p-4 border-b border-slate-200 flex items-center justify-between">
+      <h3 class="font-semibold text-sm">상품 목록</h3>
+      <a href="{% url 'evaluation:product_create' %}?portfolio={{ pf.pk }}" class="text-xs text-blue-600 hover:underline">+ 상품 추가</a>
+    </div>
+    <table class="w-full text-sm">
+      <thead class="bg-slate-50 text-xs text-slate-500">
+        <tr>
+          <th class="text-left px-4 py-2 font-medium">코드</th>
+          <th class="text-left px-4 py-2 font-medium">이름</th>
+          <th class="text-left px-4 py-2 font-medium">종류</th>
+          <th class="text-right px-4 py-2 font-medium">명목</th>
+          <th class="text-right px-4 py-2 font-medium">평가액</th>
+          <th class="text-right px-4 py-2 font-medium">PnL</th>
+          <th class="text-right px-4 py-2 font-medium">비중</th>
+          <th class="text-center px-4 py-2 font-medium">한도</th>
+          <th class="px-4 py-2"></th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-slate-100">
+        {% for row in agg.per_product %}
+          <tr class="hover:bg-slate-50 {% if row.over_limit %}bg-amber-50/40{% endif %}">
+            <td class="px-4 py-2 font-mono text-xs">
+              <a href="{% url 'evaluation:product_detail' row.product.pk %}" class="text-blue-600 hover:underline">{{ row.product.code }}</a>
+            </td>
+            <td class="px-4 py-2">{{ row.product.name }}</td>
+            <td class="px-4 py-2">
+              <span class="text-xs px-1.5 py-0.5 rounded bg-slate-100 text-slate-700">{{ row.product.get_kind_display }}</span>
+            </td>
+            <td class="px-4 py-2 text-right font-mono text-xs">
+              {{ row.product.notional|floatformat:0|intcomma }}
+              <div class="text-[11px] text-slate-400">({{ row.product.notional|korean_amount }})</div>
+            </td>
+            <td class="px-4 py-2 text-right font-mono text-xs">
+              {{ row.current_value|floatformat:0|intcomma }}
+              <div class="text-[11px] text-slate-400">({{ row.current_value|korean_amount }})</div>
+            </td>
+            <td class="px-4 py-2 text-right font-mono text-xs
+              {% if row.pnl is None %}text-slate-400
+              {% elif row.pnl >= 0 %}text-green-600{% else %}text-red-600{% endif %}">
+              {% if row.pnl is None %}-{% else %}
+                {{ row.pnl|floatformat:0|intcomma }}
+                <div class="text-[11px] text-slate-400">({{ row.pnl|korean_amount }})</div>
+              {% endif %}
+            </td>
+            <td class="px-4 py-2 text-right font-mono text-xs">{{ row.weight_pct|floatformat:1 }}%</td>
+            <td class="px-4 py-2 text-center">
+              {% if row.over_limit %}
+                <span class="text-[11px] px-2 py-0.5 bg-red-100 text-red-700 rounded">초과</span>
+              {% else %}
+                <span class="text-[11px] text-slate-400">OK</span>
+              {% endif %}
+            </td>
+            <td class="px-4 py-2 text-right">
+              <a href="{% url 'evaluation:product_detail' row.product.pk %}" class="text-xs text-slate-600 hover:underline mr-2">상세</a>
+              <a href="{% url 'evaluation:product_update' row.product.pk %}" class="text-xs text-blue-600 hover:underline">수정</a>
+            </td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="9" class="text-center text-slate-400 py-10 text-sm">상품이 없습니다.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+{% endblock %}

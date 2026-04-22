@@ -1,0 +1,187 @@
+{% extends 'base.html' %}
+
+{% block content %}
+  {% if messages %}
+    {% for m in messages %}
+      <div class="mb-4 px-4 py-2 rounded text-sm
+        {% if m.tags == 'success' %}bg-green-50 text-green-700 border border-green-200
+        {% elif m.tags == 'error' %}bg-red-50 text-red-700 border border-red-200
+        {% else %}bg-blue-50 text-blue-700 border border-blue-200{% endif %}">
+        {{ m }}
+      </div>
+    {% endfor %}
+  {% endif %}
+
+  {% if recent_fail_count %}
+    <div class="mb-4 bg-red-50 border border-red-300 rounded-lg p-4 flex items-start gap-3">
+      <i class="bi bi-bell-fill text-red-600 text-xl mt-0.5"></i>
+      <div class="flex-1">
+        <div class="text-sm font-semibold text-red-700">
+          최근 15분간 <b>{{ recent_fail_count }}건</b> 실행 실패 — 조치가 필요합니다.
+        </div>
+        <ul class="mt-2 text-xs text-red-700 space-y-0.5">
+          {% for f in recent_fail_samples %}
+            <li>
+              <span class="font-mono">{{ f.executed_at|time:"H:i:s" }}</span>
+              · <b>{{ f.interface.code }}</b>
+              · {{ f.error|default:"-"|truncatechars:60 }}
+              <a href="{% url 'interfaces:log_detail' f.pk %}" class="ml-1 underline">상세</a>
+            </li>
+          {% endfor %}
+        </ul>
+      </div>
+      <a href="{% url 'interfaces:logs' %}?status=FAIL&period=1h"
+         class="text-xs px-3 py-1.5 bg-red-600 text-white rounded hover:bg-red-700 whitespace-nowrap">
+        전체 실패 로그
+      </a>
+    </div>
+  {% endif %}
+
+  <div class="grid grid-cols-4 gap-4 mb-6">
+    {% for k in kpis %}
+      <div class="bg-white rounded-lg p-4 border border-slate-200">
+        <div class="flex items-center justify-between mb-2">
+          <span class="text-xs text-slate-500">{{ k.label }}</span>
+          <i class="bi {{ k.icon }} text-{{ k.tone }}-500"></i>
+        </div>
+        <div class="text-2xl font-bold">
+          {{ k.value }}{% if k.unit %} <span class="text-sm font-normal text-slate-500">{{ k.unit }}</span>{% endif %}
+        </div>
+        <div class="text-xs mt-1
+          {% if k.sub_tone == 'ok' %}text-green-600
+          {% elif k.sub_tone == 'warn' %}text-red-600
+          {% else %}text-slate-500{% endif %}">{{ k.sub }}</div>
+      </div>
+    {% endfor %}
+  </div>
+
+  <div class="grid grid-cols-3 gap-4 mb-6">
+    <div class="col-span-2 bg-white rounded-lg p-4 border border-slate-200">
+      <div class="flex items-center justify-between mb-4">
+        <h3 class="font-semibold text-sm">시간대별 호출 추이 (오늘)</h3>
+      </div>
+      <canvas id="callChart" height="90"></canvas>
+    </div>
+    <div class="bg-white rounded-lg p-4 border border-slate-200">
+      <h3 class="font-semibold text-sm mb-4">프로토콜 분포</h3>
+      <canvas id="protoChart" height="180"></canvas>
+    </div>
+  </div>
+
+  <div class="bg-white rounded-lg border border-slate-200 mb-6">
+    <div class="flex items-center justify-between p-4 border-b border-slate-200">
+      <h3 class="font-semibold text-sm">빠른 실행 — 활성 인터페이스</h3>
+      <a href="{% url 'interfaces:execute' %}" class="text-xs text-blue-600 hover:underline">실행/재처리 페이지 &rarr;</a>
+    </div>
+    <div class="p-4 grid grid-cols-3 gap-3">
+      {% for q in quick_interfaces %}
+        <div class="border border-slate-200 rounded-lg p-3 hover:border-slate-300">
+          <div class="flex items-center justify-between mb-1">
+            <span class="text-xs px-2 py-0.5 bg-{{ q.tone }}-100 text-{{ q.tone }}-700 rounded">
+              {{ q.obj.get_protocol_display }}
+            </span>
+            {% if q.last_status == 'SUCCESS' %}
+              <span class="text-[11px] text-green-600"><i class="bi bi-check-circle-fill"></i> {{ q.last_at }}</span>
+            {% elif q.last_status == 'FAIL' %}
+              <span class="text-[11px] text-red-600"><i class="bi bi-x-circle-fill"></i> {{ q.last_at }}</span>
+            {% else %}
+              <span class="text-[11px] text-slate-400">미실행</span>
+            {% endif %}
+          </div>
+          <div class="text-sm font-medium truncate">{{ q.obj.name }}</div>
+          <div class="text-[11px] font-mono text-slate-500 truncate mb-2">{{ q.obj.code }}</div>
+          <div class="text-[11px] text-slate-500 mb-2">
+            {{ q.obj.get_operation_type_display|default:"-" }}
+            {% if q.last_latency is not None %}· {{ q.last_latency }}ms{% endif %}
+          </div>
+          <form method="post" action="{% url 'interfaces:run' q.obj.pk %}">
+            {% csrf_token %}
+            <button type="submit" class="w-full text-xs py-1.5 bg-blue-600 text-white rounded hover:bg-blue-700">
+              <i class="bi bi-play-fill"></i> 실행
+            </button>
+          </form>
+        </div>
+      {% empty %}
+        <div class="col-span-3 text-center text-sm text-slate-400 py-8">
+          활성 인터페이스가 없습니다.
+        </div>
+      {% endfor %}
+    </div>
+  </div>
+
+  <div class="bg-white rounded-lg border border-slate-200">
+    <div class="flex items-center justify-between p-4 border-b border-slate-200">
+      <h3 class="font-semibold text-sm">최근 인터페이스 실행</h3>
+      <a href="{% url 'interfaces:logs' %}" class="text-xs text-blue-600 hover:underline">전체 보기 &rarr;</a>
+    </div>
+    <table class="w-full text-sm">
+      <thead class="bg-slate-50 text-xs text-slate-500">
+        <tr>
+          <th class="text-left px-4 py-2 font-medium">시각</th>
+          <th class="text-left px-4 py-2 font-medium">인터페이스</th>
+          <th class="text-left px-4 py-2 font-medium">프로토콜</th>
+          <th class="text-left px-4 py-2 font-medium">대상</th>
+          <th class="text-left px-4 py-2 font-medium">응답</th>
+          <th class="text-left px-4 py-2 font-medium">상태</th>
+          <th class="px-4 py-2"></th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-slate-100">
+        {% for log in recent_logs %}
+          <tr>
+            <td class="px-4 py-2 text-slate-500">{{ log.time }}</td>
+            <td class="px-4 py-2 font-mono text-xs">{{ log.name }}</td>
+            <td class="px-4 py-2">
+              <span class="px-2 py-0.5 text-xs bg-{{ log.protocol_tone }}-100 text-{{ log.protocol_tone }}-700 rounded">{{ log.protocol }}</span>
+            </td>
+            <td class="px-4 py-2">{{ log.target }}</td>
+            <td class="px-4 py-2">{{ log.latency }}</td>
+            <td class="px-4 py-2">
+              {% if log.status == 'ok' %}
+                <span class="text-green-600"><i class="bi bi-check-circle-fill"></i> 성공</span>
+              {% else %}
+                <span class="text-red-600"><i class="bi bi-x-circle-fill"></i> 실패</span>
+              {% endif %}
+            </td>
+            <td class="px-4 py-2 text-right">
+              <a href="{% url 'interfaces:log_detail' log.id %}" class="text-xs text-blue-600 hover:underline">결과 보기</a>
+            </td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="7" class="text-center text-slate-400 py-8 text-sm">실행 이력이 없습니다.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+{% endblock %}
+
+{% block scripts %}
+  {{ call_chart|json_script:"call-chart-data" }}
+  {{ protocol_chart|json_script:"proto-chart-data" }}
+  <script>
+    (function () {
+      const call = JSON.parse(document.getElementById('call-chart-data').textContent);
+      new Chart(document.getElementById('callChart'), {
+        type: 'line',
+        data: {
+          labels: call.labels,
+          datasets: [
+            { label: '성공', data: call.success, borderColor: '#3b82f6', backgroundColor: 'rgba(59,130,246,0.1)', fill: true, tension: 0.35 },
+            { label: '실패', data: call.fail,    borderColor: '#ef4444', backgroundColor: 'rgba(239,68,68,0.1)', fill: true, tension: 0.35 }
+          ]
+        },
+        options: { responsive: true, plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 11 } } } } }
+      });
+
+      const proto = JSON.parse(document.getElementById('proto-chart-data').textContent);
+      new Chart(document.getElementById('protoChart'), {
+        type: 'doughnut',
+        data: {
+          labels: proto.labels,
+          datasets: [{ data: proto.data, backgroundColor: ['#3b82f6','#a855f7','#f59e0b','#10b981','#64748b'] }]
+        },
+        options: { responsive: true, plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 11 } } } } }
+      });
+    })();
+  </script>
+{% endblock %}
