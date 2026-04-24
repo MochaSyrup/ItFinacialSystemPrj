@@ -41,6 +41,37 @@
     </div>
   </div>
 
+  <div class="bg-white rounded-lg border border-slate-200 p-4 mb-4">
+    <h3 class="font-semibold text-sm mb-3">총 평가액 추이 (일별)</h3>
+    <div style="height: 260px;"><canvas id="pfChart"></canvas></div>
+  </div>
+  <script id="pf-ts-data" type="application/json">{{ timeseries_json|safe }}</script>
+  <script>
+    (function () {
+      const d = JSON.parse(document.getElementById('pf-ts-data').textContent);
+      if (!d.labels || !d.labels.length) return;
+      new Chart(document.getElementById('pfChart'), {
+        type: 'line',
+        data: {
+          labels: d.labels,
+          datasets: [{
+            label: '포트폴리오 평가액',
+            data: d.values,
+            borderColor: '#10b981',
+            backgroundColor: 'rgba(16,185,129,0.1)',
+            fill: true, tension: 0.2, pointRadius: 0, borderWidth: 1.8,
+          }],
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          plugins: { legend: { display: false }, tooltip: { mode: 'index', intersect: false } },
+          scales: { x: { ticks: { maxTicksLimit: 10 } } },
+          interaction: { mode: 'nearest', intersect: false },
+        },
+      });
+    })();
+  </script>
+
   {% if agg.over_limit_count %}
     <div class="mb-4 p-3 bg-amber-50 border border-amber-300 text-amber-800 rounded flex items-center gap-2">
       <i class="bi bi-exclamation-triangle-fill"></i>

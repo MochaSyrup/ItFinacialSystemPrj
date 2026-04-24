@@ -13,11 +13,13 @@
 ### 2. 금융상품 평가 (`/evaluation/`)
 - 평가 대상: **주식, 채권, 파생상품, 프로젝트 사업**
 - 산출 지표:
-  - 주식: VaR (95%, 1d), 연 변동성
-  - 채권: 가격, Macaulay Duration, Convexity
-  - 파생: 레버리지 기반 실효 노출 VaR
-  - 프로젝트: NPV, IRR
+  - 주식: 파라메트릭 VaR (95%, 1d), Historical VaR, 연 변동성
+  - 채권: 가격, Macaulay Duration, Convexity, YTM 시계열
+  - 파생: 레버리지 기반 실효 노출 VaR + 변동성 시계열
+  - 프로젝트: NPV, IRR, 할인율 시계열
 - 포트폴리오 집계: 총 평가액 / 총 VaR / 평균 듀레이션 / 비중 한도 초과 알람
+- **시세 히스토리 (`PriceHistory`)** — 상품별 365일 가격/수익률/변동성/YTM 시계열
+- **스트레스 테스트** — 금리 ±bp / 주가 ±% / 변동성 ×N / 복합 위기 7개 시나리오. 포트폴리오 평가액 변화 + 상품별 기여도 분석
 
 ### 3. 원가/관리회계 (`/evaluation/costing/`)
 IT 금융 플랫폼사의 **조직 단위 P&L 시스템**. 프로젝트 단위 수익성 분석 + 공통비 배분까지 end-to-end.
@@ -59,12 +61,15 @@ ClaudePrject/
 │   ├── accounts/         # 사용자/권한
 │   ├── core/             # 공통 (템플릿 태그, 컨텍스트 프로세서)
 │   ├── evaluation/       # 금융상품 평가 + 원가/관리회계
-│   │   ├── metrics.py      # VaR / Duration / NPV / IRR 계산
+│   │   ├── metrics.py      # VaR / Duration / NPV / IRR / Historical VaR 계산
+│   │   ├── stress.py       # 스트레스 테스트 엔진 (금리/주가/변동성 쇼크)
 │   │   ├── costing.py      # 월 인건비 안분 + 표준원가 배분 엔진
-│   │   ├── models.py       # Portfolio·Product + Division·Department·Employee·Project·CostEntry·RevenueEntry·AllocationRule 등
+│   │   ├── models.py       # Portfolio·Product·PriceHistory + Division·Department·Employee·Project·CostEntry·RevenueEntry·AllocationRule 등
 │   │   └── management/commands/
 │   │       ├── seed_costing_master.py         # 5본부/15부서/50명/20프로젝트 시드
 │   │       ├── seed_costing_transactions.py   # 4개월치 원가/매출/배분 트랜잭션 시드
+│   │       ├── seed_portfolios.py             # 포트폴리오/상품 간이 시드
+│   │       ├── seed_market_data.py            # 3포트폴리오×~30상품 + 365일 시세 히스토리
 │   │       └── allocate_salary.py             # 월 인건비 안분 CLI
 │   ├── interfaces/       # 인터페이스 통합관리
 │   │   ├── protocols/      # REST/SOAP/MQ/SFTP/BATCH 어댑터
@@ -101,10 +106,10 @@ pip install -r requirements.txt
 python manage.py migrate
 
 # 4. (선택) 시드 데이터 생성
-python manage.py seed_interfaces         # 인터페이스 샘플
-python manage.py seed_portfolios         # 포트폴리오·금융상품 샘플
-python manage.py seed_costing_master     # 원가/관리회계 마스터 (5본부/15부서/50명/20프로젝트)
-python manage.py seed_costing_transactions  # 원가/관리회계 4개월치 트랜잭션 (원가·매출·배분 확정)
+python manage.py seed_interfaces             # 인터페이스 샘플
+python manage.py seed_market_data --reset    # 포트폴리오 3개 × ~30 상품 + 365일 시세
+python manage.py seed_costing_master         # 원가/관리회계 마스터 (5본부/15부서/50명/20프로젝트)
+python manage.py seed_costing_transactions   # 원가/관리회계 4개월치 트랜잭션 (원가·매출·배분)
 
 # 5. 관리자 계정 생성
 python manage.py createsuperuser
@@ -166,8 +171,14 @@ python manage.py allocate_salary 2026-04 --reset   # 기존 SALARY 항목 삭제
 - `npv(cashflows, rate)` / `irr(cashflows)` — 현재가치/내부수익률
 - `bond_price`, `macaulay_duration`, `convexity` — 채권 지표
 - `parametric_var(notional, sigma_annual, days, z)` — 파라메트릭 VaR (95% z=1.6449)
-- `compute(product)` — 상품 종류별 평가
+- `historical_var_rate(prices, confidence, days)` — 실측 시계열 기반 VaR (5% 분위수)
+- `compute(product)` — 상품 종류별 평가 (평가액 + 지표 + 계산 근거 trace)
 - `aggregate(products)` — 포트폴리오 집계 (총 평가액, VaR, 비중 한도 체크)
+
+### 스트레스 테스트 (`apps/evaluation/stress.py`)
+- 7개 기본 시나리오: 금리 ±100/50bp, 주가 -20/-10%, 변동성 ×1.5/×2.0, 복합 위기
+- `_apply_shocks(product, shocks)` → 쇼크 적용된 proxy → `metrics.compute()` 재호출
+- 반환: 포트폴리오 base/stressed 평가액, Δ금액/%, VaR 증가분, 상품별 기여도
 
 ### 원가 엔진 (`apps/evaluation/costing.py`)
 - `allocate_monthly_salary(period, reset=False)` — 월 인건비 자동 안분

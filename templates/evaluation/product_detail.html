@@ -143,33 +143,86 @@
     </div>
   {% endif %}
 
-  {% if obj.kind == 'STOCK' and c.returns %}
-    <!-- 수익률 시계열 -->
+  {% if hist_var_rate is not None %}
+    <!-- Historical VaR -->
     <div class="bg-white rounded-lg border border-slate-200 mt-4 p-4">
-      <h3 class="font-semibold text-sm mb-3">수익률 시계열 ({{ c.returns|length }}개)</h3>
-      <div style="height: 220px;"><canvas id="retChart"></canvas></div>
+      <div class="flex items-baseline gap-4">
+        <h3 class="font-semibold text-sm">Historical VaR (95%, 1d) · 실측 시계열 {{ history_count }}일 기준</h3>
+      </div>
+      <div class="mt-3 grid grid-cols-3 gap-4">
+        <div>
+          <div class="text-xs text-slate-500">손실률 (분위수)</div>
+          <div class="mt-1 text-xl font-bold font-mono text-red-600">{{ hist_var_rate|floatformat:4 }} <span class="text-sm text-slate-500">({{ hist_var_rate|floatformat:2 }}%)</span></div>
+        </div>
+        <div>
+          <div class="text-xs text-slate-500">손실 금액 (평가액 × 손실률)</div>
+          <div class="mt-1 text-xl font-bold font-mono text-red-600">{{ hist_var_amount|floatformat:0|intcomma }}</div>
+          <div class="text-[11px] text-slate-400">({{ hist_var_amount|korean_amount }})</div>
+        </div>
+        <div>
+          <div class="text-xs text-slate-500">참고: 파라메트릭 VaR</div>
+          <div class="mt-1 text-sm font-mono text-slate-700">
+            {% for k, v in c.metrics.items %}
+              {% if 'VaR' in k %}{{ v|floatformat:0|intcomma }}{% endif %}
+            {% endfor %}
+          </div>
+        </div>
+      </div>
     </div>
-    {{ c.returns|json_script:"returns-data" }}
+  {% endif %}
+
+  {% if history_count %}
+    <!-- 시세 히스토리 차트 -->
+    <div class="bg-white rounded-lg border border-slate-200 mt-4 p-4">
+      <h3 class="font-semibold text-sm mb-3">시세 히스토리 · {{ history_count }}일</h3>
+      <div style="height: 280px;"><canvas id="priceChart"></canvas></div>
+      {% if obj.kind == 'BOND' %}
+        <h4 class="font-semibold text-xs text-slate-600 mt-4 mb-2">YTM 추이</h4>
+        <div style="height: 180px;"><canvas id="yieldChart"></canvas></div>
+      {% elif obj.kind == 'STOCK' or obj.kind == 'DERIV' %}
+        <h4 class="font-semibold text-xs text-slate-600 mt-4 mb-2">변동성(연) 추이 · rolling 20d</h4>
+        <div style="height: 180px;"><canvas id="volChart"></canvas></div>
+      {% endif %}
+    </div>
+    <script id="chart-data" type="application/json">{{ chart_json|safe }}</script>
     <script>
       (function () {
-        const returns = JSON.parse(document.getElementById('returns-data').textContent);
-        new Chart(document.getElementById('retChart'), {
-          type: 'line',
-          data: {
-            labels: returns.map((_, i) => i + 1),
-            datasets: [{
-              label: '일간 수익률',
-              data: returns,
-              borderColor: '#3b82f6',
-              backgroundColor: 'rgba(59,130,246,0.1)',
-              fill: true, tension: 0.2, pointRadius: 2,
-            }],
-          },
-          options: {
-            responsive: true, maintainAspectRatio: false,
-            plugins: { legend: { display: false } },
-          },
-        });
+        const data = JSON.parse(document.getElementById('chart-data').textContent);
+        const kind = '{{ obj.kind }}';
+
+        function mkLine(id, label, values, color) {
+          const el = document.getElementById(id);
+          if (!el || !values || !values.some(v => v !== null)) return;
+          new Chart(el, {
+            type: 'line',
+            data: {
+              labels: data.labels,
+              datasets: [{
+                label: label, data: values,
+                borderColor: color,
+                backgroundColor: color + '22',
+                fill: true, tension: 0.2, pointRadius: 0, borderWidth: 1.5,
+              }],
+            },
+            options: {
+              responsive: true, maintainAspectRatio: false,
+              plugins: { legend: { display: false }, tooltip: { mode: 'index', intersect: false } },
+              scales: { x: { ticks: { maxTicksLimit: 12 } } },
+              interaction: { mode: 'nearest', intersect: false },
+            },
+          });
+        }
+
+        if (kind === 'BOND') {
+          mkLine('priceChart', '가격 (par 기준)', data.price, '#0ea5e9');
+          mkLine('yieldChart', 'YTM', data.yield, '#ef4444');
+        } else if (kind === 'STOCK') {
+          mkLine('priceChart', '현재가', data.price, '#3b82f6');
+          mkLine('volChart', '변동성(연)', data.volatility, '#f59e0b');
+        } else if (kind === 'DERIV') {
+          mkLine('priceChart', '지수가', data.price, '#a855f7');
+          mkLine('volChart', '변동성(연)', data.volatility, '#f59e0b');
+        }
       })();
     </script>
   {% endif %}

@@ -109,19 +109,58 @@ def portfolio_delete(request, pk):
     return redirect('evaluation:portfolio')
 
 
+def _product_position_factor(p):
+    """상품별 포지션 환산 계수 — price × factor = 포지션 평가액"""
+    from decimal import Decimal
+    m = p.metrics_json or {}
+    if p.kind == 'STOCK':
+        shares = m.get('shares')
+        return float(shares) if shares else (float(p.notional or 0) / float(m.get('base_price') or m.get('current_price') or 1))
+    if p.kind == 'BOND':
+        par = float(m.get('par') or 10000)
+        return float(p.notional or 0) / par
+    if p.kind == 'DERIV':
+        base = float(m.get('base_price') or 100)
+        return float(p.notional or 0) / base
+    return 1.0
+
+
+def _portfolio_timeseries(pf):
+    """포트폴리오 총 평가액 일별 시계열. PROJECT 제외."""
+    from collections import defaultdict
+    from apps.evaluation.models import PriceHistory
+    series = defaultdict(float)
+    products = list(pf.products.exclude(kind='PROJECT'))
+    for p in products:
+        factor = _product_position_factor(p)
+        rows = PriceHistory.objects.filter(product=p).exclude(price__isnull=True).values('date', 'price')
+        for r in rows:
+            series[r['date']] += float(r['price']) * factor
+    items = sorted(series.items())
+    return {
+        'labels': [d.isoformat() for d, _ in items],
+        'values': [round(v, 2) for _, v in items],
+    }
+
+
 def portfolio_detail(request, pk):
+    import json
     pf = get_object_or_404(Portfolio, pk=pk)
     products = list(pf.products.all().order_by('kind', 'code'))
     agg = metrics.aggregate(products, weight_limit_pct=pf.weight_limit_pct)
+    ts = _portfolio_timeseries(pf)
     return render(request, 'evaluation/portfolio_detail.html', {
         'page_title': f'포트폴리오 — {pf.name}',
         'page_subtitle': f'{pf.base_currency} · {len(products)}개 상품',
         'pf': pf,
         'agg': agg,
+        'timeseries_json': json.dumps(ts),
     })
 
 
 def product_detail(request, pk):
+    import json
+    from apps.evaluation.models import PriceHistory
     obj = get_object_or_404(FinancialProduct.objects.select_related('portfolio'), pk=pk)
     c = metrics.compute(obj)
     pf = obj.portfolio
@@ -129,6 +168,24 @@ def product_detail(request, pk):
     siblings = list(pf.products.all())
     agg = metrics.aggregate(siblings, weight_limit_pct=pf.weight_limit_pct)
     my_row = next((r for r in agg['per_product'] if r['product'].pk == obj.pk), None)
+
+    # 시세 히스토리 + 히스토리컬 VaR
+    rows = list(PriceHistory.objects.filter(product=obj).order_by('date'))
+    price_series = [float(r.price) for r in rows if r.price is not None]
+    yield_series = [float(r.yield_rate) for r in rows if r.yield_rate is not None]
+    vol_series = [float(r.volatility) for r in rows if r.volatility is not None]
+    hist_var_rate = metrics.historical_var_rate(price_series) if price_series else None
+    hist_var_amount = None
+    if hist_var_rate is not None and c.get('current_value'):
+        hist_var_amount = float(c['current_value']) * hist_var_rate
+
+    chart = {
+        'labels': [r.date.isoformat() for r in rows],
+        'price': [float(r.price) if r.price is not None else None for r in rows],
+        'yield': [float(r.yield_rate) if r.yield_rate is not None else None for r in rows],
+        'volatility': [float(r.volatility) if r.volatility is not None else None for r in rows],
+    }
+
     return render(request, 'evaluation/product_detail.html', {
         'page_title': f'{obj.code} — {obj.name}',
         'page_subtitle': f'{obj.get_kind_display()} · {pf.name}',
@@ -136,6 +193,10 @@ def product_detail(request, pk):
         'pf': pf,
         'c': c,
         'row': my_row,
+        'chart_json': json.dumps(chart),
+        'hist_var_rate': hist_var_rate,
+        'hist_var_amount': hist_var_amount,
+        'history_count': len(rows),
     })
 
 
@@ -208,11 +269,15 @@ def product_delete(request, pk):
 # ---------- 리스크 분석 ----------
 
 def risk(request):
+    import json
+    from . import stress
     portfolios = Portfolio.objects.all().order_by('name')
     pf_id = request.GET.get('portfolio', '').strip()
     selected = None
     agg = None
     kind_distribution = []
+    stress_results = []
+    stress_chart = {'labels': [], 'delta_pct': [], 'tones': []}
 
     if pf_id:
         selected = portfolios.filter(pk=pf_id).first()
@@ -228,10 +293,17 @@ def risk(request):
             {'label': labels_map.get(k, k), 'count': v}
             for k, v in counter.most_common()
         ]
+        # 스트레스 테스트
+        stress_results = stress.run_all(products)
+        stress_chart = {
+            'labels': [r['label'] for r in stress_results],
+            'delta_pct': [round(r['delta_pct'], 2) for r in stress_results],
+            'tones': [r['tone'] for r in stress_results],
+        }
 
     return render(request, 'evaluation/risk.html', {
         'page_title': '리스크 분석',
-        'page_subtitle': '금융상품 평가 / VaR · Duration · NPV · IRR',
+        'page_subtitle': '금융상품 평가 / VaR · Duration · Stress Test',
         'portfolios': portfolios,
         'selected': selected,
         'agg': agg,
@@ -240,6 +312,8 @@ def risk(request):
             'labels': [k['label'] for k in kind_distribution],
             'data': [k['count'] for k in kind_distribution],
         },
+        'stress_results': stress_results,
+        'stress_chart_json': json.dumps(stress_chart),
     })
 
 

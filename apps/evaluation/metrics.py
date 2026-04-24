@@ -70,6 +70,24 @@ def parametric_var(notional, sigma_annual, holding_days=1, confidence_z=Z_95):
     return notional * sigma_holding * confidence_z
 
 
+def historical_var_rate(prices, confidence=0.95, holding_days=1):
+    """가격 시계열 → 과거 수익률 분포의 (1-conf) 분위수 절대값 = 손실률.
+
+    prices: 오래된 → 최근 순서의 float/Decimal 리스트
+    반환: 0.0~1.0 (예: 0.025 = 2.5% 손실)
+    """
+    from math import log
+    ps = [float(p) for p in prices if p is not None and float(p) > 0]
+    if len(ps) < 30:
+        return None
+    rets = [log(ps[i] / ps[i - 1]) for i in range(1, len(ps))]
+    rets.sort()
+    idx = max(0, min(len(rets) - 1, int(len(rets) * (1 - confidence))))
+    q = rets[idx]  # 5% 분위수 (가장 음수)
+    rate = -q * sqrt(holding_days)
+    return max(0.0, rate)
+
+
 # ---------- per-kind compute ----------
 
 def compute(product):

@@ -504,3 +504,33 @@ class FinancialProduct(models.Model):
 
     def __str__(self):
         return f'{self.code} {self.name}'
+
+
+class PriceHistory(models.Model):
+    """시세/지표 일별 스냅샷 — 히스토리컬 VaR, 시계열 차트, 스트레스 base"""
+    product = models.ForeignKey(
+        FinancialProduct, on_delete=models.CASCADE, related_name='prices',
+    )
+    date = models.DateField()
+    price = models.DecimalField(
+        max_digits=18, decimal_places=6, null=True, blank=True,
+        help_text='현재가(주식)/가격(채권 par 기준)/지수가(파생). PROJECT 는 null',
+    )
+    yield_rate = models.DecimalField(
+        max_digits=10, decimal_places=6, null=True, blank=True,
+        help_text='채권 YTM / 프로젝트 할인율 — kind 별',
+    )
+    volatility = models.DecimalField(
+        max_digits=10, decimal_places=6, null=True, blank=True,
+        help_text='rolling 20d 연 변동성',
+    )
+
+    class Meta:
+        unique_together = [('product', 'date')]
+        ordering = ['product', 'date']
+        indexes = [models.Index(fields=['product', 'date'])]
+        verbose_name = '시세 히스토리'
+        verbose_name_plural = '시세 히스토리'
+
+    def __str__(self):
+        return f'{self.product.code} @ {self.date}'

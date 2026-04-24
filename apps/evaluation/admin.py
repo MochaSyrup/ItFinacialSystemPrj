@@ -13,6 +13,7 @@ from .models import (
     FinancialProduct,
     InternalTransfer,
     Portfolio,
+    PriceHistory,
     Project,
     ProjectAssignment,
     ProjectBudget,
@@ -31,6 +32,14 @@ class FinancialProductAdmin(admin.ModelAdmin):
     list_display = ('code', 'name', 'portfolio', 'kind', 'notional')
     list_filter = ('kind', 'portfolio')
     search_fields = ('code', 'name')
+
+
+@admin.register(PriceHistory)
+class PriceHistoryAdmin(admin.ModelAdmin):
+    list_display = ('product', 'date', 'price', 'yield_rate', 'volatility')
+    list_filter = ('product__portfolio', 'product__kind', 'date')
+    search_fields = ('product__code', 'product__name')
+    date_hierarchy = 'date'
 
 
 # ============================================================
