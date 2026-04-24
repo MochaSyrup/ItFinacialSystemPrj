@@ -1,0 +1,219 @@
+{% extends 'base.html' %}
+{% load humanize money %}
+
+{% block content %}
+  {# ── 기간 필터 ── #}
+  <form method="get" class="bg-white rounded-lg border border-slate-200 p-3 mb-4 flex items-end gap-3">
+    <div>
+      <label class="block text-xs text-slate-500 mb-1">기간(시작) YYYY-MM</label>
+      <input type="text" name="period_from" value="{{ period_from }}" placeholder="2026-01"
+             class="border border-slate-300 rounded px-2 py-1.5 text-sm w-28">
+    </div>
+    <div>
+      <label class="block text-xs text-slate-500 mb-1">기간(끝)</label>
+      <input type="text" name="period_to" value="{{ period_to }}" placeholder="2026-12"
+             class="border border-slate-300 rounded px-2 py-1.5 text-sm w-28">
+    </div>
+    <button type="submit" class="text-xs px-3 py-1.5 bg-slate-700 text-white rounded hover:bg-slate-800">적용</button>
+    <a href="{% url 'evaluation:costing_dashboard' %}" class="text-xs px-3 py-1.5 text-slate-600 hover:bg-slate-100 rounded">초기화</a>
+
+    <div class="ml-auto text-xs text-slate-500">
+      본부 <strong>{{ totals.divisions }}</strong> ·
+      부서 <strong>{{ totals.departments }}</strong> ·
+      활성 인력 <strong>{{ totals.employees }}</strong> ·
+      진행/기획 프로젝트 <strong>{{ totals.projects_active }}</strong>
+    </div>
+  </form>
+
+  {# ── 전사 KPI ── #}
+  <div class="grid grid-cols-4 gap-4 mb-6">
+    <div class="bg-white rounded-lg border border-slate-200 p-4">
+      <div class="text-sm text-slate-500">매출</div>
+      <div class="mt-2 text-2xl font-bold font-mono text-blue-600">{{ kpi.revenue|floatformat:0|intcomma }}</div>
+      <div class="text-xs text-slate-400 mt-1">{{ kpi.revenue|korean_amount }}</div>
+    </div>
+    <div class="bg-white rounded-lg border border-slate-200 p-4">
+      <div class="text-sm text-slate-500">원가</div>
+      <div class="mt-2 text-2xl font-bold font-mono text-slate-700">{{ kpi.cost|floatformat:0|intcomma }}</div>
+      <div class="text-xs text-slate-400 mt-1">{{ kpi.cost|korean_amount }}</div>
+    </div>
+    <div class="bg-white rounded-lg border border-slate-200 p-4">
+      <div class="text-sm text-slate-500">영업이익</div>
+      <div class="mt-2 text-2xl font-bold font-mono {% if kpi.profit < 0 %}text-red-600{% else %}text-emerald-600{% endif %}">
+        {{ kpi.profit|floatformat:0|intcomma }}
+      </div>
+      <div class="text-xs text-slate-400 mt-1">{{ kpi.profit|korean_amount }}</div>
+    </div>
+    <div class="bg-white rounded-lg border border-slate-200 p-4">
+      <div class="text-sm text-slate-500">이익률</div>
+      <div class="mt-2 text-2xl font-bold font-mono {% if kpi.margin < 0 %}text-red-600{% else %}text-emerald-600{% endif %}">
+        {{ kpi.margin|floatformat:1 }}%
+      </div>
+      <div class="text-xs text-slate-400 mt-1">매출 대비</div>
+    </div>
+  </div>
+
+  {# ── 원가 구성 차트 + 항목별 집계 ── #}
+  <div class="grid grid-cols-3 gap-4 mb-6">
+    <div class="bg-white rounded-lg border border-slate-200 p-4 col-span-1">
+      <div class="text-sm font-semibold mb-3">원가 구성 (출처별)</div>
+      <div style="height: 220px;"><canvas id="sourceChart"></canvas></div>
+    </div>
+    <div class="bg-white rounded-lg border border-slate-200 col-span-2">
+      <div class="px-4 py-2 border-b border-slate-200 text-sm font-semibold">항목별 원가</div>
+      <table class="w-full text-sm">
+        <thead class="bg-slate-50 text-xs text-slate-500">
+          <tr>
+            <th class="text-left px-3 py-2 font-medium">항목</th>
+            <th class="text-right px-3 py-2 font-medium">금액</th>
+            <th class="text-right px-3 py-2 font-medium">비중</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-100">
+          {% for r in cat_rows %}
+            <tr>
+              <td class="px-3 py-1.5">
+                <span class="text-xs text-slate-400">{{ r.category__code|default:"-" }}</span>
+                {{ r.category__name|default:"(미지정)" }}
+              </td>
+              <td class="px-3 py-1.5 text-right font-mono">{{ r.amount|floatformat:0|intcomma }}</td>
+              <td class="px-3 py-1.5 text-right text-xs text-slate-500">
+                {% if kpi.cost %}{% widthratio r.amount kpi.cost 100 %}%{% else %}-{% endif %}
+              </td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="3" class="text-center text-slate-400 py-6 text-sm">해당 기간 원가 없음</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  {# ── 본부별 P&L ── #}
+  <div class="bg-white rounded-lg border border-slate-200 mb-6">
+    <div class="px-4 py-3 border-b border-slate-200 text-sm font-semibold">본부별 P&L</div>
+    <table class="w-full text-sm">
+      <thead class="bg-slate-50 text-xs text-slate-500">
+        <tr>
+          <th class="text-left px-3 py-2 font-medium">본부</th>
+          <th class="text-right px-3 py-2 font-medium">매출</th>
+          <th class="text-right px-3 py-2 font-medium">원가</th>
+          <th class="text-right px-3 py-2 font-medium">이익</th>
+          <th class="text-right px-3 py-2 font-medium">이익률</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-slate-100">
+        {% for r in div_rows %}
+          <tr class="hover:bg-slate-50">
+            <td class="px-3 py-2">
+              <span class="text-xs text-slate-400">[{{ r.div.code }}]</span>
+              <span class="font-medium">{{ r.div.name }}</span>
+            </td>
+            <td class="px-3 py-2 text-right font-mono">{{ r.revenue|floatformat:0|intcomma }}</td>
+            <td class="px-3 py-2 text-right font-mono">{{ r.cost|floatformat:0|intcomma }}</td>
+            <td class="px-3 py-2 text-right font-mono font-semibold {% if r.profit < 0 %}text-red-600{% else %}text-emerald-600{% endif %}">
+              {{ r.profit|floatformat:0|intcomma }}
+            </td>
+            <td class="px-3 py-2 text-right font-mono text-xs {% if r.margin < 0 %}text-red-600{% else %}text-emerald-600{% endif %}">
+              {{ r.margin|floatformat:1 }}%
+            </td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="5" class="text-center text-slate-400 py-6 text-sm">데이터 없음</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {# ── 프로젝트 P&L Top10 / Bottom10 ── #}
+  <div class="grid grid-cols-2 gap-4">
+    <div class="bg-white rounded-lg border border-slate-200">
+      <div class="px-4 py-3 border-b border-slate-200 text-sm font-semibold">
+        <i class="bi bi-trophy text-emerald-600"></i> 이익 Top 10
+      </div>
+      <table class="w-full text-sm">
+        <thead class="bg-slate-50 text-xs text-slate-500">
+          <tr>
+            <th class="text-left px-3 py-2 font-medium">프로젝트</th>
+            <th class="text-right px-3 py-2 font-medium">매출</th>
+            <th class="text-right px-3 py-2 font-medium">원가</th>
+            <th class="text-right px-3 py-2 font-medium">이익</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-100">
+          {% for r in prj_top %}
+            <tr>
+              <td class="px-3 py-1.5 text-xs">
+                <a href="{% url 'evaluation:costing_project_detail' r.p.pk %}" class="text-blue-600 hover:underline">
+                  <span class="text-slate-400">{{ r.p.code }}</span> {{ r.p.name }}
+                </a>
+              </td>
+              <td class="px-3 py-1.5 text-right font-mono">{{ r.revenue|floatformat:0|intcomma }}</td>
+              <td class="px-3 py-1.5 text-right font-mono text-slate-500">{{ r.cost|floatformat:0|intcomma }}</td>
+              <td class="px-3 py-1.5 text-right font-mono font-semibold text-emerald-600">{{ r.profit|floatformat:0|intcomma }}</td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="4" class="text-center text-slate-400 py-6 text-sm">데이터 없음</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div class="bg-white rounded-lg border border-slate-200">
+      <div class="px-4 py-3 border-b border-slate-200 text-sm font-semibold">
+        <i class="bi bi-exclamation-triangle text-red-600"></i> 손실 Bottom 10
+      </div>
+      <table class="w-full text-sm">
+        <thead class="bg-slate-50 text-xs text-slate-500">
+          <tr>
+            <th class="text-left px-3 py-2 font-medium">프로젝트</th>
+            <th class="text-right px-3 py-2 font-medium">매출</th>
+            <th class="text-right px-3 py-2 font-medium">원가</th>
+            <th class="text-right px-3 py-2 font-medium">이익</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-100">
+          {% for r in prj_bottom %}
+            <tr>
+              <td class="px-3 py-1.5 text-xs">
+                <a href="{% url 'evaluation:costing_project_detail' r.p.pk %}" class="text-blue-600 hover:underline">
+                  <span class="text-slate-400">{{ r.p.code }}</span> {{ r.p.name }}
+                </a>
+              </td>
+              <td class="px-3 py-1.5 text-right font-mono">{{ r.revenue|floatformat:0|intcomma }}</td>
+              <td class="px-3 py-1.5 text-right font-mono text-slate-500">{{ r.cost|floatformat:0|intcomma }}</td>
+              <td class="px-3 py-1.5 text-right font-mono font-semibold {% if r.profit < 0 %}text-red-600{% else %}text-emerald-600{% endif %}">
+                {{ r.profit|floatformat:0|intcomma }}
+              </td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="4" class="text-center text-slate-400 py-6 text-sm">데이터 없음</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <script>
+    (function() {
+      const data = {{ source_chart_json|safe }};
+      if (!data.labels.length) return;
+      const ctx = document.getElementById('sourceChart');
+      if (!ctx) return;
+      new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+          labels: data.labels,
+          datasets: [{
+            data: data.data,
+            backgroundColor: ['#3b82f6', '#a855f7', '#f59e0b', '#10b981', '#64748b', '#ef4444'],
+            borderWidth: 1,
+          }]
+        },
+        options: {
+          maintainAspectRatio: false,
+          plugins: { legend: { position: 'bottom', labels: { font: {size: 11} } } }
+        }
+      });
+    })();
+  </script>
+{% endblock %}

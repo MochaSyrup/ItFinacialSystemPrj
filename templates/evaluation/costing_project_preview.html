@@ -1,0 +1,119 @@
+{% extends 'base.html' %}
+{% load humanize money %}
+
+{% block content %}
+  <div class="mb-4 px-4 py-3 rounded text-sm bg-blue-50 text-blue-700 border border-blue-200">
+    <i class="bi bi-info-circle"></i> 아래 내용으로 등록할까요? 다시 작성하려면 "수정으로 돌아가기"를 누르세요.
+  </div>
+
+  <div class="bg-white rounded-lg border border-slate-200 mb-6">
+    <div class="px-5 py-3 border-b border-slate-200">
+      <h3 class="font-semibold text-base">기본 정보</h3>
+    </div>
+    <dl class="grid grid-cols-2 gap-x-8 gap-y-3 p-5 text-sm">
+      <div><dt class="text-slate-500">프로젝트 코드</dt><dd class="font-mono mt-1">{{ p.code }}</dd></div>
+      <div><dt class="text-slate-500">상태</dt><dd class="mt-1">{{ p.get_status_display }}</dd></div>
+      <div class="col-span-2"><dt class="text-slate-500">프로젝트명</dt><dd class="mt-1 font-medium">{{ p.name }}</dd></div>
+      <div><dt class="text-slate-500">주관 본부</dt><dd class="mt-1">{{ p.division.name }}</dd></div>
+      <div><dt class="text-slate-500">주관 부서</dt><dd class="mt-1">{{ p.department.name|default:"-" }}</dd></div>
+      <div><dt class="text-slate-500">PM</dt><dd class="mt-1">{{ p.pm.name|default:"-" }}</dd></div>
+      <div><dt class="text-slate-500">유형</dt><dd class="mt-1">{{ p.get_kind_display }}</dd></div>
+      <div><dt class="text-slate-500">원가센터 유형</dt><dd class="mt-1">{{ p.get_cost_center_type_display }}</dd></div>
+      <div><dt class="text-slate-500">우선순위</dt><dd class="mt-1">{{ p.get_priority_display }}</dd></div>
+      <div><dt class="text-slate-500">기간</dt><dd class="mt-1">{{ p.start_date|date:"Y-m-d" }} ~ {{ p.end_date|date:"Y-m-d" }}</dd></div>
+      <div><dt class="text-slate-500">계획 공수 (M/M)</dt><dd class="mt-1">{{ p.planned_mm }}</dd></div>
+      <div><dt class="text-slate-500">고객</dt><dd class="mt-1">{{ p.customer|default:"-" }} ({{ p.get_customer_type_display }})</dd></div>
+      <div><dt class="text-slate-500">계약금액</dt><dd class="mt-1 font-mono">{{ p.contract_amount|floatformat:0|intcomma }} <span class="text-slate-400">({{ p.contract_amount|korean_amount }})</span></dd></div>
+      <div><dt class="text-slate-500">총 예산</dt><dd class="mt-1 font-mono">{{ p.budget|floatformat:0|intcomma }} <span class="text-slate-400">({{ p.budget|korean_amount }})</span></dd></div>
+      <div class="col-span-2">
+        <dt class="text-slate-500">수익 (계약 − 예산)</dt>
+        <dd class="mt-1 font-mono text-base font-semibold {% if profit < 0 %}text-red-600{% else %}text-emerald-600{% endif %}">
+          {{ profit|floatformat:0|intcomma }} <span class="text-slate-400 text-sm">({{ profit|korean_amount }})</span>
+        </dd>
+      </div>
+      <div><dt class="text-slate-500">배분 대상</dt><dd class="mt-1">{% if p.is_allocatable %}예{% else %}아니오{% endif %}</dd></div>
+      <div><dt class="text-slate-500">배분 기준</dt><dd class="mt-1">{{ p.get_allocation_key_display }}</dd></div>
+      <div><dt class="text-slate-500">승인자</dt><dd class="mt-1">{{ p.approved_by|default:"-" }}</dd></div>
+      <div><dt class="text-slate-500">승인일</dt><dd class="mt-1">{{ p.approved_at|date:"Y-m-d"|default:"-" }}</dd></div>
+    </dl>
+  </div>
+
+  <div class="bg-white rounded-lg border border-slate-200 mb-6">
+    <div class="px-5 py-3 border-b border-slate-200">
+      <h3 class="font-semibold text-base">원가 항목별 예산 분해</h3>
+    </div>
+    <table class="w-full text-sm">
+      <thead class="bg-slate-50 text-xs text-slate-500">
+        <tr>
+          <th class="text-left px-4 py-2 font-medium">항목</th>
+          <th class="text-right px-4 py-2 font-medium">예산</th>
+          <th class="text-left px-4 py-2 font-medium">비고</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-slate-100">
+        {% for b in budget_rows %}
+          <tr>
+            <td class="px-4 py-2">{{ b.category_label }}</td>
+            <td class="px-4 py-2 text-right font-mono">{{ b.amount|floatformat:0|intcomma }}</td>
+            <td class="px-4 py-2 text-xs text-slate-500">{{ b.memo }}</td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="3" class="text-center text-slate-400 py-4 text-sm">예산 분해가 입력되지 않았습니다.</td></tr>
+        {% endfor %}
+      </tbody>
+      {% if budget_rows %}
+        <tfoot class="bg-slate-50 text-sm">
+          <tr>
+            <td class="px-4 py-2 font-medium">합계</td>
+            <td class="px-4 py-2 text-right font-mono font-semibold">{{ budget_total|floatformat:0|intcomma }}</td>
+            <td></td>
+          </tr>
+        </tfoot>
+      {% endif %}
+    </table>
+  </div>
+
+  {# 두 개의 폼 — 하나는 확정, 하나는 돌아가기 #}
+  <div class="flex items-center justify-end gap-2">
+    {# 돌아가기: 사용자가 입력한 모든 값을 다시 form 화면에 채워야 함 → 같은 데이터로 form view를 재호출 #}
+    <form method="post" action="{% url 'evaluation:costing_project_create' %}" class="inline">
+      {% csrf_token %}
+      {% for f in form %}{% if f.value is not None %}
+        <input type="hidden" name="{{ f.html_name }}" value="{{ f.value }}">
+      {% endif %}{% endfor %}
+      {% for bf in budget_formset %}
+        {% for f in bf %}{% if f.value is not None %}
+          <input type="hidden" name="{{ f.html_name }}" value="{{ f.value }}">
+        {% endif %}{% endfor %}
+      {% endfor %}
+      <input type="hidden" name="{{ budget_formset.management_form.TOTAL_FORMS.html_name }}" value="{{ budget_formset.management_form.TOTAL_FORMS.value }}">
+      <input type="hidden" name="{{ budget_formset.management_form.INITIAL_FORMS.html_name }}" value="{{ budget_formset.management_form.INITIAL_FORMS.value }}">
+      <input type="hidden" name="{{ budget_formset.management_form.MIN_NUM_FORMS.html_name }}" value="{{ budget_formset.management_form.MIN_NUM_FORMS.value }}">
+      <input type="hidden" name="{{ budget_formset.management_form.MAX_NUM_FORMS.html_name }}" value="{{ budget_formset.management_form.MAX_NUM_FORMS.value }}">
+      <input type="hidden" name="stage" value="back">
+      <button type="submit" class="text-sm px-4 py-2 text-slate-600 hover:bg-slate-100 rounded">
+        <i class="bi bi-arrow-left"></i> 수정으로 돌아가기
+      </button>
+    </form>
+
+    <form method="post" action="{% url 'evaluation:costing_project_create' %}" class="inline">
+      {% csrf_token %}
+      {% for f in form %}{% if f.value is not None %}
+        <input type="hidden" name="{{ f.html_name }}" value="{{ f.value }}">
+      {% endif %}{% endfor %}
+      {% for bf in budget_formset %}
+        {% for f in bf %}{% if f.value is not None %}
+          <input type="hidden" name="{{ f.html_name }}" value="{{ f.value }}">
+        {% endif %}{% endfor %}
+      {% endfor %}
+      <input type="hidden" name="{{ budget_formset.management_form.TOTAL_FORMS.html_name }}" value="{{ budget_formset.management_form.TOTAL_FORMS.value }}">
+      <input type="hidden" name="{{ budget_formset.management_form.INITIAL_FORMS.html_name }}" value="{{ budget_formset.management_form.INITIAL_FORMS.value }}">
+      <input type="hidden" name="{{ budget_formset.management_form.MIN_NUM_FORMS.html_name }}" value="{{ budget_formset.management_form.MIN_NUM_FORMS.value }}">
+      <input type="hidden" name="{{ budget_formset.management_form.MAX_NUM_FORMS.html_name }}" value="{{ budget_formset.management_form.MAX_NUM_FORMS.value }}">
+      <input type="hidden" name="stage" value="confirm">
+      <button type="submit" class="text-sm px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
+        <i class="bi bi-check-lg"></i> 등록 확정
+      </button>
+    </form>
+  </div>
+{% endblock %}

@@ -1,0 +1,74 @@
+{% extends 'base.html' %}
+{% load humanize money %}
+
+{% block content %}
+  <div class="mb-4 flex items-center justify-between">
+    <p class="text-sm text-slate-500">본부 → 부서 → 인력 순으로 그룹화. 총 {{ total }}명 (활성).</p>
+  </div>
+
+  <div class="space-y-4">
+    {% for g in groups %}
+      <div class="bg-white rounded-lg border border-slate-200">
+        <div class="flex items-center justify-between p-4 border-b border-slate-200">
+          <div>
+            <span class="text-xs text-slate-400">[{{ g.div.code }}]</span>
+            <span class="font-semibold text-base">{{ g.div.name }}</span>
+          </div>
+          <div class="text-sm text-slate-500">{{ g.total }}명</div>
+        </div>
+        <div class="divide-y divide-slate-100">
+          {% for dg in g.depts %}
+            <div class="p-4">
+              <div class="flex items-center justify-between mb-3">
+                <div class="text-sm">
+                  <span class="text-xs text-slate-400">[{{ dg.dept.code }}]</span>
+                  <span class="font-medium">{{ dg.dept.name }}</span>
+                  {% if dg.dept.kind == 'COMMON' %}
+                    <span class="text-xs px-1.5 py-0.5 bg-amber-50 text-amber-700 rounded ml-2">공통관리</span>
+                  {% else %}
+                    <span class="text-xs px-1.5 py-0.5 bg-blue-50 text-blue-700 rounded ml-2">프로젝트수행</span>
+                  {% endif %}
+                </div>
+                <div class="text-xs text-slate-500">{{ dg.employees|length }}명</div>
+              </div>
+              {% if dg.employees %}
+                <table class="w-full text-sm">
+                  <thead class="bg-slate-50 text-xs text-slate-500">
+                    <tr>
+                      <th class="text-left px-3 py-1.5 font-medium">사번</th>
+                      <th class="text-left px-3 py-1.5 font-medium">이름</th>
+                      <th class="text-left px-3 py-1.5 font-medium">직급</th>
+                      <th class="text-right px-3 py-1.5 font-medium">월 표준인건비</th>
+                      <th class="text-left px-3 py-1.5 font-medium">효력 시작</th>
+                    </tr>
+                  </thead>
+                  <tbody class="divide-y divide-slate-100">
+                    {% for e in dg.employees %}
+                      <tr class="hover:bg-slate-50">
+                        <td class="px-3 py-1.5 font-mono text-xs">{{ e.emp_no }}</td>
+                        <td class="px-3 py-1.5">{{ e.name }}</td>
+                        <td class="px-3 py-1.5 text-xs">{{ e.get_rank_display }}</td>
+                        <td class="px-3 py-1.5 text-right font-mono text-xs">
+                          {{ e.standard_monthly_cost|floatformat:0|intcomma }}
+                          <span class="text-slate-400">({{ e.standard_monthly_cost|korean_amount }})</span>
+                        </td>
+                        <td class="px-3 py-1.5 text-xs text-slate-500">{{ e.effective_from|date:"Y-m-d" }}</td>
+                      </tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+              {% else %}
+                <div class="text-center text-slate-400 py-3 text-xs">소속 인력이 없습니다.</div>
+              {% endif %}
+            </div>
+          {% endfor %}
+        </div>
+      </div>
+    {% empty %}
+      <div class="text-center text-slate-400 py-10 text-sm">
+        <i class="bi bi-inbox text-2xl block mb-2"></i>
+        등록된 본부가 없습니다.
+      </div>
+    {% endfor %}
+  </div>
+{% endblock %}

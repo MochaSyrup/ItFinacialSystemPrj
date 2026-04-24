@@ -1,0 +1,42 @@
+{% extends 'base.html' %}
+
+{% block content %}
+  <div class="max-w-2xl">
+    <div class="mb-4 px-4 py-3 rounded text-sm bg-blue-50 text-blue-700 border border-blue-200">
+      <i class="bi bi-info-circle"></i>
+      배분 규칙은 <strong>"어떤 비용 항목"</strong>을 <strong>"어떤 기준(Driver)"</strong>으로
+      <strong>"어디로(차원)"</strong> 내릴지 정의합니다. 규칙 생성 후 실행 이력에서 시뮬 → 확정하세요.
+    </div>
+
+    <form method="post" class="bg-white rounded-lg border border-slate-200 p-6 space-y-5">
+      {% csrf_token %}
+      {% if form.non_field_errors %}
+        <div class="px-3 py-2 rounded text-sm bg-red-50 text-red-700 border border-red-200">
+          {{ form.non_field_errors|striptags }}
+        </div>
+      {% endif %}
+
+      <div class="grid grid-cols-2 gap-4">
+        {% for field in form %}
+          <div {% if field.name == 'name' %}class="col-span-2"{% endif %}>
+            <label class="block text-xs font-medium text-slate-600 mb-1">
+              {{ field.label }}{% if field.field.required %} <span class="text-red-500">*</span>{% endif %}
+            </label>
+            {% if field.name == 'is_active' %}
+              <div class="flex items-center gap-2 h-9">{{ field }} <span class="text-xs text-slate-500">{{ field.help_text }}</span></div>
+            {% else %}
+              {{ field }}
+              {% if field.help_text %}<div class="text-[11px] text-slate-400 mt-1">{{ field.help_text }}</div>{% endif %}
+            {% endif %}
+            {% if field.errors %}<div class="text-xs text-red-600 mt-1">{{ field.errors|striptags }}</div>{% endif %}
+          </div>
+        {% endfor %}
+      </div>
+
+      <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+        <a href="{% url 'evaluation:allocation_rules' %}" class="text-sm px-4 py-2 text-slate-600 hover:bg-slate-100 rounded">취소</a>
+        <button type="submit" class="text-sm px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">등록</button>
+      </div>
+    </form>
+  </div>
+{% endblock %}

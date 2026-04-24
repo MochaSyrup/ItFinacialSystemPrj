@@ -1,0 +1,43 @@
+{% extends 'base.html' %}
+{% load humanize %}
+
+{% block content %}
+  <div class="max-w-2xl">
+    <div class="mb-4 px-4 py-3 rounded text-sm bg-blue-50 text-blue-700 border border-blue-200">
+      <i class="bi bi-info-circle"></i>
+      해당 기간에 활성인 <strong>인력 투입(ProjectAssignment)</strong>을 기준으로
+      <code>월 표준인건비 × 투입률%</code> 을 프로젝트별로 안분해서 원가 원장(<strong>source=월 인건비 안분</strong>)에 등록합니다.
+    </div>
+
+    <form method="post" class="bg-white rounded-lg border border-slate-200 p-6 space-y-5">
+      {% csrf_token %}
+      {% if form.non_field_errors %}
+        <div class="px-3 py-2 rounded text-sm bg-red-50 text-red-700 border border-red-200">
+          {{ form.non_field_errors|striptags }}
+        </div>
+      {% endif %}
+      {% for field in form %}
+        <div>
+          <label class="block text-xs font-medium text-slate-600 mb-1">
+            {{ field.label }}{% if field.field.required %} <span class="text-red-500">*</span>{% endif %}
+          </label>
+          {% if field.name == 'reset' %}
+            <div class="flex items-center gap-2 h-9">{{ field }} <span class="text-xs text-slate-500">{{ field.help_text }}</span></div>
+          {% else %}
+            {{ field }}
+            {% if field.help_text %}<div class="text-[11px] text-slate-400 mt-1">{{ field.help_text }}</div>{% endif %}
+          {% endif %}
+          {% if field.errors %}<div class="text-xs text-red-600 mt-1">{{ field.errors|striptags }}</div>{% endif %}
+        </div>
+      {% endfor %}
+      <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+        <a href="{% url 'evaluation:costing_ledger' %}" class="text-sm px-4 py-2 text-slate-600 hover:bg-slate-100 rounded">취소</a>
+        <button type="submit"
+                class="text-sm px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+                onclick="return confirm('인건비 안분을 실행할까요?\n같은 기간에 이미 안분 항목이 있으면 스킵됩니다 (재생성하려면 reset 체크).');">
+          <i class="bi bi-play-fill"></i> 안분 실행
+        </button>
+      </div>
+    </form>
+  </div>
+{% endblock %}

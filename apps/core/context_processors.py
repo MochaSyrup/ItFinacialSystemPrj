@@ -8,6 +8,24 @@ EVAL_PORTFOLIO_VIEWS = {
 }
 EVAL_PRODUCT_VIEWS = {'product', 'product_create', 'product_update', 'product_delete', 'product_detail'}
 
+COSTING_DASHBOARD_VIEWS = {'costing_dashboard'}
+COSTING_DIVISION_VIEWS = {
+    'costing_division', 'costing_division_create', 'costing_division_delete',
+    'costing_department_create', 'costing_department_delete',
+}
+COSTING_EMPLOYEE_VIEWS = {'costing_employee'}
+COSTING_PROJECT_VIEWS = {
+    'costing_project', 'costing_project_create', 'costing_project_delete',
+    'costing_project_detail',
+}
+COSTING_LEDGER_VIEWS = {'costing_ledger', 'costing_ledger_create', 'costing_ledger_allocate'}
+COSTING_REVENUE_VIEWS = {'costing_revenue', 'costing_revenue_create', 'costing_revenue_delete'}
+COSTING_ALLOCATION_VIEWS = {
+    'allocation_rules', 'allocation_rule_create', 'allocation_rule_delete',
+    'allocation_runs', 'allocation_run_simulate', 'allocation_run_detail',
+    'allocation_run_commit', 'allocation_run_reverse', 'allocation_run_delete',
+}
+
 
 def nav(request):
     match = getattr(request, 'resolver_match', None)
@@ -29,6 +47,20 @@ def nav(request):
             group = 'product'
         elif current == 'risk':
             group = 'risk'
+        elif current in COSTING_DASHBOARD_VIEWS:
+            group = 'costing_dashboard'
+        elif current in COSTING_DIVISION_VIEWS:
+            group = 'costing_division'
+        elif current in COSTING_EMPLOYEE_VIEWS:
+            group = 'costing_employee'
+        elif current in COSTING_PROJECT_VIEWS:
+            group = 'costing_project'
+        elif current in COSTING_LEDGER_VIEWS:
+            group = 'costing_ledger'
+        elif current in COSTING_REVENUE_VIEWS:
+            group = 'costing_revenue'
+        elif current in COSTING_ALLOCATION_VIEWS:
+            group = 'costing_allocation'
 
     # 헤더 실패 뱃지 — 최근 15분 실패 카운트
     fail_count = 0

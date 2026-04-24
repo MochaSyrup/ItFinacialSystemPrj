@@ -1,0 +1,236 @@
+{% extends 'base.html' %}
+
+{% block content %}
+  <form method="post" class="space-y-6 max-w-5xl" id="prj-form">
+    {% csrf_token %}
+    <input type="hidden" name="stage" value="preview">
+
+    {% if form.non_field_errors %}
+      <div class="px-4 py-2 rounded text-sm bg-red-50 text-red-700 border border-red-200">
+        {{ form.non_field_errors|striptags }}
+      </div>
+    {% endif %}
+
+    {# ── 1. 식별/소속 ── #}
+    <section class="bg-white rounded-lg border border-slate-200">
+      <div class="px-5 py-3 border-b border-slate-200">
+        <h3 class="font-semibold text-base">1. 식별 / 소속</h3>
+      </div>
+      <div class="p-5 grid grid-cols-2 gap-4">
+        {% for field in form %}{% if field.name in 'code,name,division,department,pm' %}
+          <div {% if field.name == 'name' %}class="col-span-2"{% endif %}>
+            <label class="block text-xs font-medium text-slate-600 mb-1">
+              {{ field.label }}{% if field.field.required %} <span class="text-red-500">*</span>{% endif %}
+            </label>
+            {{ field }}
+            {% if field.help_text %}<div class="text-[11px] text-slate-400 mt-1">{{ field.help_text }}</div>{% endif %}
+            {% if field.errors %}<div class="text-xs text-red-600 mt-1">{{ field.errors|striptags }}</div>{% endif %}
+          </div>
+        {% endif %}{% endfor %}
+      </div>
+      <div class="px-5 pb-4 text-[11px] text-slate-500">
+        <i class="bi bi-info-circle"></i> 본부를 선택하면 부서 / PM 옵션이 해당 본부 소속으로 자동 필터됩니다.
+      </div>
+    </section>
+
+    {# ── 2. 분류/일정 ── #}
+    <section class="bg-white rounded-lg border border-slate-200">
+      <div class="px-5 py-3 border-b border-slate-200">
+        <h3 class="font-semibold text-base">2. 분류 / 일정</h3>
+      </div>
+      <div class="p-5 grid grid-cols-2 gap-4">
+        {% for field in form %}{% if field.name in 'kind,cost_center_type,priority,status,start_date,end_date' %}
+          <div>
+            <label class="block text-xs font-medium text-slate-600 mb-1">
+              {{ field.label }}{% if field.field.required %} <span class="text-red-500">*</span>{% endif %}
+            </label>
+            {{ field }}
+            {% if field.help_text %}<div class="text-[11px] text-slate-400 mt-1">{{ field.help_text }}</div>{% endif %}
+            {% if field.errors %}<div class="text-xs text-red-600 mt-1">{{ field.errors|striptags }}</div>{% endif %}
+          </div>
+        {% endif %}{% endfor %}
+      </div>
+    </section>
+
+    {# ── 3. 수익 ── #}
+    <section class="bg-white rounded-lg border border-slate-200">
+      <div class="px-5 py-3 border-b border-slate-200">
+        <h3 class="font-semibold text-base">3. 수익 (성과분석 입력)</h3>
+      </div>
+      <div class="p-5 grid grid-cols-2 gap-4">
+        {% for field in form %}{% if field.name in 'customer,customer_type,contract_amount' %}
+          <div {% if field.name == 'contract_amount' %}class="col-span-2"{% endif %}>
+            <label class="block text-xs font-medium text-slate-600 mb-1">
+              {{ field.label }}{% if field.field.required %} <span class="text-red-500">*</span>{% endif %}
+            </label>
+            {{ field }}
+            {% if field.help_text %}<div class="text-[11px] text-slate-400 mt-1">{{ field.help_text }}</div>{% endif %}
+            {% if field.errors %}<div class="text-xs text-red-600 mt-1">{{ field.errors|striptags }}</div>{% endif %}
+          </div>
+        {% endif %}{% endfor %}
+      </div>
+    </section>
+
+    {# ── 4. 원가 / 배분 ── #}
+    <section class="bg-white rounded-lg border border-slate-200">
+      <div class="px-5 py-3 border-b border-slate-200">
+        <h3 class="font-semibold text-base">4. 원가 총괄 / 배분</h3>
+      </div>
+      <div class="p-5 grid grid-cols-2 gap-4">
+        {% for field in form %}{% if field.name in 'budget,planned_mm,is_allocatable,allocation_key' %}
+          <div>
+            <label class="block text-xs font-medium text-slate-600 mb-1">
+              {{ field.label }}{% if field.field.required %} <span class="text-red-500">*</span>{% endif %}
+            </label>
+            {% if field.name == 'is_allocatable' %}
+              <div class="flex items-center gap-2 h-9">{{ field }} <span class="text-xs text-slate-500">{{ field.help_text }}</span></div>
+            {% else %}
+              {{ field }}
+              {% if field.help_text %}<div class="text-[11px] text-slate-400 mt-1">{{ field.help_text }}</div>{% endif %}
+            {% endif %}
+            {% if field.errors %}<div class="text-xs text-red-600 mt-1">{{ field.errors|striptags }}</div>{% endif %}
+          </div>
+        {% endif %}{% endfor %}
+      </div>
+    </section>
+
+    {# ── 5. 예산 분해 ── #}
+    <section class="bg-white rounded-lg border border-slate-200">
+      <div class="px-5 py-3 border-b border-slate-200">
+        <h3 class="font-semibold text-base">5. 원가 항목별 예산 분해</h3>
+        <p class="text-xs text-slate-500 mt-1">첫 줄은 인건비로 미리 선택되어 있고, 부서를 선택하면 해당 부서 인력의 월 표준인건비 합산이 자동으로 채워집니다.</p>
+      </div>
+      <div class="p-5">
+        {{ budget_formset.management_form }}
+        <table class="w-full text-sm">
+          <thead class="bg-slate-50 text-xs text-slate-500">
+            <tr>
+              <th class="text-left px-3 py-2 font-medium w-44">항목</th>
+              <th class="text-left px-3 py-2 font-medium w-56">예산 (KRW)</th>
+              <th class="text-left px-3 py-2 font-medium">비고</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-100">
+            {% for bf in budget_formset %}
+              <tr>
+                {% for hidden in bf.hidden_fields %}{{ hidden }}{% endfor %}
+                <td class="px-3 py-2">{{ bf.category }}</td>
+                <td class="px-3 py-2">{{ bf.amount }}</td>
+                <td class="px-3 py-2">{{ bf.memo }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        {% if budget_formset.non_form_errors %}
+          <div class="text-xs text-red-600 mt-2">{{ budget_formset.non_form_errors|striptags }}</div>
+        {% endif %}
+      </div>
+    </section>
+
+    {# ── 6. 거버넌스 ── #}
+    <section class="bg-white rounded-lg border border-slate-200">
+      <div class="px-5 py-3 border-b border-slate-200">
+        <h3 class="font-semibold text-base">6. 승인</h3>
+      </div>
+      <div class="p-5 grid grid-cols-2 gap-4">
+        {% for field in form %}{% if field.name in 'approved_by,approved_at' %}
+          <div>
+            <label class="block text-xs font-medium text-slate-600 mb-1">{{ field.label }}</label>
+            {{ field }}
+            {% if field.errors %}<div class="text-xs text-red-600 mt-1">{{ field.errors|striptags }}</div>{% endif %}
+          </div>
+        {% endif %}{% endfor %}
+      </div>
+    </section>
+
+    <div class="flex items-center justify-end gap-2">
+      <a href="{% url 'evaluation:costing_project' %}" class="text-sm px-4 py-2 text-slate-600 hover:bg-slate-100 rounded">취소</a>
+      <button type="submit" class="text-sm px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">미리보기</button>
+    </div>
+  </form>
+
+  <script>
+    const DIVISION_PAYLOAD = {{ division_payload_json|safe }};
+    const LABOR_VALUE = "{{ category_labor_value }}";
+
+    const $div  = document.getElementById('id_division');
+    const $dept = document.getElementById('id_department');
+    const $pm   = document.getElementById('id_pm');
+
+    // 원본 옵션 보관
+    const originalDeptOptions = $dept ? Array.from($dept.options).map(o => ({value:o.value, text:o.textContent})) : [];
+    const originalPmOptions   = $pm   ? Array.from($pm.options).map(o => ({value:o.value, text:o.textContent}))   : [];
+
+    function rebuildOptions(selectEl, originals, allowedIds, placeholder) {
+      if (!selectEl) return;
+      const cur = selectEl.value;
+      selectEl.innerHTML = '';
+      // 빈 옵션 유지
+      const blank = originals.find(o => o.value === '');
+      if (blank) {
+        const opt = document.createElement('option');
+        opt.value = ''; opt.textContent = placeholder || blank.text;
+        selectEl.appendChild(opt);
+      }
+      originals.forEach(o => {
+        if (o.value === '') return;
+        if (allowedIds.has(parseInt(o.value, 10))) {
+          const opt = document.createElement('option');
+          opt.value = o.value;
+          opt.textContent = o.text;
+          if (o.value === cur) opt.selected = true;
+          selectEl.appendChild(opt);
+        }
+      });
+    }
+
+    function applyDivisionFilter() {
+      const divId = parseInt($div.value, 10);
+      if (!divId || !DIVISION_PAYLOAD[divId]) {
+        rebuildOptions($dept, originalDeptOptions, new Set(), '본부를 먼저 선택하세요');
+        rebuildOptions($pm,   originalPmOptions,   new Set(), '본부를 먼저 선택하세요');
+        updateLaborAutoFill(0);
+        return;
+      }
+      const data = DIVISION_PAYLOAD[divId];
+      const deptIds = new Set(data.departments.map(d => d.id));
+      const empIds  = new Set(data.employees.map(e => e.id));
+      rebuildOptions($dept, originalDeptOptions, deptIds, '---------');
+      rebuildOptions($pm,   originalPmOptions,   empIds,  '---------');
+    }
+
+    function updateLaborAutoFill(amount) {
+      // 5번 섹션의 첫 번째 budget row를 LABOR로 셋팅하고 amount 자동 채움 (사용자가 직접 입력했으면 덮어쓰지 않음)
+      const catSel = document.querySelector('select[name="budget-0-category"]');
+      const amtInp = document.querySelector('input[name="budget-0-amount"]');
+      if (!catSel || !amtInp) return;
+      catSel.value = LABOR_VALUE;
+      if (!amtInp.dataset.userTouched) {
+        amtInp.value = amount > 0 ? amount.toFixed(0) : '';
+      }
+    }
+
+    // 부서 선택 시 — 해당 부서의 인력 월급 합산을 인건비에 자동 반영
+    function applyDeptLabor() {
+      const divId = parseInt($div.value, 10);
+      const deptId = parseInt($dept.value, 10);
+      if (!divId || !deptId || !DIVISION_PAYLOAD[divId]) return;
+      const dept = DIVISION_PAYLOAD[divId].departments.find(d => d.id === deptId);
+      if (dept) updateLaborAutoFill(dept.monthly_cost_sum);
+    }
+
+    if ($div) $div.addEventListener('change', () => { applyDivisionFilter(); });
+    if ($dept) $dept.addEventListener('change', applyDeptLabor);
+
+    const amt0 = document.querySelector('input[name="budget-0-amount"]');
+    if (amt0) amt0.addEventListener('input', () => { amt0.dataset.userTouched = '1'; });
+
+    // 페이지 진입 시 — 첫 줄 카테고리를 LABOR로
+    (function init() {
+      const catSel0 = document.querySelector('select[name="budget-0-category"]');
+      if (catSel0 && !catSel0.value) catSel0.value = LABOR_VALUE;
+      // 본부가 이미 선택돼있으면 필터 한 번 적용
+      if ($div && $div.value) applyDivisionFilter();
+    })();
+  </script>
+{% endblock %}

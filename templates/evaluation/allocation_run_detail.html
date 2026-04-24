@@ -1,0 +1,131 @@
+{% extends 'base.html' %}
+{% load humanize %}
+
+{% block content %}
+  {% if messages %}
+    {% for m in messages %}
+      <div class="mb-4 px-4 py-2 rounded text-sm {% if 'error' in m.tags %}bg-red-50 text-red-700 border border-red-200{% else %}bg-green-50 text-green-700 border border-green-200{% endif %}">
+        {{ m }}
+      </div>
+    {% endfor %}
+  {% endif %}
+
+  {# ── 헤더 요약 ── #}
+  <div class="bg-white rounded-lg border border-slate-200 p-4 mb-4">
+    <div class="flex items-start justify-between">
+      <div>
+        <div class="text-xs text-slate-500 mb-1">Run #{{ run.pk }}</div>
+        <div class="flex items-center gap-3">
+          {% if run.status == 'SIMULATED' %}
+            <span class="text-sm px-2 py-0.5 bg-blue-50 text-blue-700 rounded font-medium">{{ run.get_status_display }}</span>
+          {% elif run.status == 'COMMITTED' %}
+            <span class="text-sm px-2 py-0.5 bg-emerald-50 text-emerald-700 rounded font-medium">{{ run.get_status_display }}</span>
+          {% else %}
+            <span class="text-sm px-2 py-0.5 bg-slate-100 text-slate-500 rounded font-medium">{{ run.get_status_display }}</span>
+          {% endif %}
+          <span class="text-base font-semibold">{{ run.period }}</span>
+          {% if rule %}
+            <span class="text-sm text-slate-500">
+              · [{{ rule.code }}] {{ rule.name }}
+              <span class="ml-2 text-xs px-1.5 py-0.5 bg-amber-50 text-amber-700 rounded">
+                {{ rule.get_driver_type_display }}
+              </span>
+            </span>
+          {% endif %}
+        </div>
+        <div class="mt-1 text-xs text-slate-500">
+          실행자 {{ run.run_by.username|default:"-" }} · {{ run.run_at|date:"Y-m-d H:i" }}
+          {% if run.note %} · {{ run.note }}{% endif %}
+        </div>
+      </div>
+      <div class="flex gap-2">
+        {% if run.status == 'SIMULATED' %}
+          <form method="post" action="{% url 'evaluation:allocation_run_commit' run.pk %}"
+                onsubmit="return confirm('이 결과로 원가 원장에 CostEntry 를 생성할까요? 확정 후엔 취소(REVERSED)로만 되돌릴 수 있습니다.');">
+            {% csrf_token %}
+            <button class="text-sm px-4 py-2 bg-emerald-600 text-white rounded hover:bg-emerald-700">
+              <i class="bi bi-check-lg"></i> 확정
+            </button>
+          </form>
+          <form method="post" action="{% url 'evaluation:allocation_run_delete' run.pk %}"
+                onsubmit="return confirm('이 시뮬을 삭제할까요?');">
+            {% csrf_token %}
+            <button class="text-sm px-4 py-2 text-red-600 border border-red-300 rounded hover:bg-red-50">
+              시뮬 삭제
+            </button>
+          </form>
+        {% elif run.status == 'COMMITTED' %}
+          <form method="post" action="{% url 'evaluation:allocation_run_reverse' run.pk %}"
+                onsubmit="return confirm('확정된 배분을 취소합니다. 이미 생성된 CostEntry 가 삭제됩니다. 계속할까요?');">
+            {% csrf_token %}
+            <button class="text-sm px-4 py-2 bg-amber-600 text-white rounded hover:bg-amber-700">
+              <i class="bi bi-arrow-counterclockwise"></i> 취소(Reverse)
+            </button>
+          </form>
+        {% endif %}
+        <a href="{% url 'evaluation:allocation_runs' %}"
+           class="text-sm px-4 py-2 border border-slate-300 text-slate-700 rounded hover:bg-slate-50">
+          이력으로
+        </a>
+      </div>
+    </div>
+  </div>
+
+  {# ── KPI ── #}
+  <div class="grid grid-cols-3 gap-4 mb-4">
+    <div class="bg-white rounded-lg border border-slate-200 p-4">
+      <div class="text-sm text-slate-500">대상 원가 합계</div>
+      <div class="mt-2 text-2xl font-bold font-mono">{{ run.total_amount|floatformat:0|intcomma }}</div>
+    </div>
+    <div class="bg-white rounded-lg border border-slate-200 p-4">
+      <div class="text-sm text-slate-500">배분된 금액 합</div>
+      <div class="mt-2 text-2xl font-bold font-mono">{{ total_allocated|floatformat:0|intcomma }}</div>
+    </div>
+    <div class="bg-white rounded-lg border border-slate-200 p-4">
+      <div class="text-sm text-slate-500">결과 라인 수</div>
+      <div class="mt-2 text-2xl font-bold">{{ rows|length }}</div>
+    </div>
+  </div>
+
+  {# ── 결과 테이블 ── #}
+  <div class="bg-white rounded-lg border border-slate-200">
+    <div class="p-3 border-b border-slate-200 text-sm font-semibold">배분 결과</div>
+    <table class="w-full text-sm">
+      <thead class="bg-slate-50 text-xs text-slate-500">
+        <tr>
+          <th class="text-left px-3 py-2 font-medium">차원</th>
+          <th class="text-left px-3 py-2 font-medium">대상</th>
+          <th class="text-right px-3 py-2 font-medium">Driver 값</th>
+          <th class="text-right px-3 py-2 font-medium">비중</th>
+          <th class="text-right px-3 py-2 font-medium">배분금액</th>
+          <th class="text-left px-3 py-2 font-medium">CostEntry</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-slate-100">
+        {% for row in rows %}
+          <tr class="hover:bg-slate-50">
+            <td class="px-3 py-1.5 text-xs">{{ row.r.get_target_dimension_display }}</td>
+            <td class="px-3 py-1.5">
+              <div>{{ row.label }}</div>
+              {% if row.sub %}<div class="text-xs text-slate-400">{{ row.sub }}</div>{% endif %}
+            </td>
+            <td class="px-3 py-1.5 text-right font-mono text-xs">{{ row.r.driver_value|floatformat:4 }}</td>
+            <td class="px-3 py-1.5 text-right font-mono text-xs">{{ row.r.driver_share|floatformat:4 }}</td>
+            <td class="px-3 py-1.5 text-right font-mono font-medium">{{ row.r.allocated_amount|floatformat:0|intcomma }}</td>
+            <td class="px-3 py-1.5 text-xs text-slate-500">
+              {% if row.r.cost_entry_id %}
+                <span class="text-emerald-600">#{{ row.r.cost_entry_id }}</span>
+              {% else %}
+                <span class="text-slate-400">(미생성)</span>
+              {% endif %}
+            </td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="6" class="text-center text-slate-400 py-8 text-sm">
+            결과가 없습니다 — 대상 원가 또는 Driver 값이 0인지 확인하세요.
+          </td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+{% endblock %}

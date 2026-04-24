@@ -1,0 +1,88 @@
+{% extends 'base.html' %}
+{% load humanize money %}
+
+{% block content %}
+  {% if messages %}
+    {% for m in messages %}
+      <div class="mb-4 px-4 py-2 rounded text-sm bg-green-50 text-green-700 border border-green-200">{{ m }}</div>
+    {% endfor %}
+  {% endif %}
+
+  <div class="bg-white rounded-lg border border-slate-200">
+    <div class="flex items-center justify-between p-4 border-b border-slate-200">
+      <div>
+        <h3 class="font-semibold text-sm">프로젝트 목록</h3>
+        <p class="text-xs text-slate-500 mt-1">총 {{ projects|length }}건</p>
+      </div>
+      <a href="{% url 'evaluation:costing_project_create' %}"
+         class="text-sm px-3 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 flex items-center gap-1.5">
+        <i class="bi bi-plus-lg"></i> 신규 등록
+      </a>
+    </div>
+    <table class="w-full text-sm">
+      <thead class="bg-slate-50 text-xs text-slate-500">
+        <tr>
+          <th class="text-left px-3 py-2 font-medium">코드</th>
+          <th class="text-left px-3 py-2 font-medium">프로젝트명</th>
+          <th class="text-left px-3 py-2 font-medium">본부 / 부서</th>
+          <th class="text-left px-3 py-2 font-medium">유형</th>
+          <th class="text-left px-3 py-2 font-medium">고객</th>
+          <th class="text-left px-3 py-2 font-medium">상태</th>
+          <th class="text-left px-3 py-2 font-medium">기간</th>
+          <th class="text-right px-3 py-2 font-medium">계약금액</th>
+          <th class="text-right px-3 py-2 font-medium">예산</th>
+          <th class="text-right px-3 py-2 font-medium">투입</th>
+          <th class="px-3 py-2"></th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-slate-100">
+        {% for p in projects %}
+          <tr class="hover:bg-slate-50">
+            <td class="px-3 py-2 font-mono text-xs">{{ p.code }}</td>
+            <td class="px-3 py-2">{{ p.name }}</td>
+            <td class="px-3 py-2 text-xs text-slate-600">
+              {{ p.division.name }}
+              {% if p.department %}<div class="text-[11px] text-slate-400">└ {{ p.department.name }}</div>{% endif %}
+            </td>
+            <td class="px-3 py-2 text-xs">{{ p.get_kind_display }}</td>
+            <td class="px-3 py-2 text-xs">
+              {{ p.customer|default:"-" }}
+              {% if p.customer_type == 'INTERNAL' %}
+                <span class="text-[10px] px-1 py-0.5 bg-amber-50 text-amber-700 rounded ml-1">내부</span>
+              {% else %}
+                <span class="text-[10px] px-1 py-0.5 bg-green-50 text-green-700 rounded ml-1">외부</span>
+              {% endif %}
+            </td>
+            <td class="px-3 py-2">
+              {% if p.status == 'ACTIVE' %}
+                <span class="text-xs px-2 py-0.5 bg-green-50 text-green-700 rounded">{{ p.get_status_display }}</span>
+              {% elif p.status == 'PLANNING' %}
+                <span class="text-xs px-2 py-0.5 bg-blue-50 text-blue-700 rounded">{{ p.get_status_display }}</span>
+              {% elif p.status == 'CLOSED' %}
+                <span class="text-xs px-2 py-0.5 bg-slate-100 text-slate-600 rounded">{{ p.get_status_display }}</span>
+              {% else %}
+                <span class="text-xs px-2 py-0.5 bg-amber-50 text-amber-700 rounded">{{ p.get_status_display }}</span>
+              {% endif %}
+            </td>
+            <td class="px-3 py-2 text-xs text-slate-500">{{ p.start_date|date:"Y-m-d" }}<br><span class="text-slate-400">~ {{ p.end_date|date:"Y-m-d" }}</span></td>
+            <td class="px-3 py-2 text-right font-mono text-xs">{{ p.contract_amount|floatformat:0|intcomma }}</td>
+            <td class="px-3 py-2 text-right font-mono text-xs">{{ p.budget|floatformat:0|intcomma }}</td>
+            <td class="px-3 py-2 text-right">{{ p.assignment_count }}</td>
+            <td class="px-3 py-2 text-right whitespace-nowrap">
+              <form method="post" action="{% url 'evaluation:costing_project_delete' p.pk %}" class="inline"
+                    onsubmit="return confirm('정말 삭제하시겠습니까?\n프로젝트 [{{ p.code }}] {{ p.name }}\n인력 투입({{ p.assignment_count }}건) · 예산 분해도 함께 삭제됩니다.');">
+                {% csrf_token %}
+                <button type="submit" class="text-xs text-red-600 hover:underline">삭제</button>
+              </form>
+            </td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="11" class="text-center text-slate-400 py-10 text-sm">
+            <i class="bi bi-inbox text-2xl block mb-2"></i>
+            등록된 프로젝트가 없습니다.
+          </td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+{% endblock %}

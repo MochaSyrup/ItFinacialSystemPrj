@@ -1,0 +1,128 @@
+{% extends 'base.html' %}
+{% load humanize money %}
+
+{% block content %}
+  <div class="mb-4">
+    <a href="{% url 'evaluation:costing_project' %}" class="text-sm text-blue-600 hover:underline">
+      <i class="bi bi-arrow-left"></i> 프로젝트 목록
+    </a>
+  </div>
+
+  {# ── KPI 카드 ── #}
+  <div class="grid grid-cols-4 gap-4 mb-6">
+    <div class="bg-white rounded-lg border border-slate-200 p-4">
+      <div class="text-sm text-slate-500">계약금액</div>
+      <div class="mt-2 text-xl font-bold font-mono">{{ p.contract_amount|floatformat:0|intcomma }}</div>
+      <div class="text-xs text-slate-400">{{ p.contract_amount|korean_amount }}</div>
+    </div>
+    <div class="bg-white rounded-lg border border-slate-200 p-4">
+      <div class="text-sm text-slate-500">예산 (총괄)</div>
+      <div class="mt-2 text-xl font-bold font-mono">{{ p.budget|floatformat:0|intcomma }}</div>
+      <div class="text-xs text-slate-400">{{ p.budget|korean_amount }}</div>
+    </div>
+    <div class="bg-white rounded-lg border border-slate-200 p-4">
+      <div class="text-sm text-slate-500">수익 (계약−예산)</div>
+      <div class="mt-2 text-xl font-bold font-mono {% if profit < 0 %}text-red-600{% else %}text-emerald-600{% endif %}">
+        {{ profit|floatformat:0|intcomma }}
+      </div>
+      <div class="text-xs text-slate-400">{{ profit|korean_amount }}</div>
+    </div>
+    <div class="bg-white rounded-lg border border-slate-200 p-4">
+      <div class="text-sm text-slate-500">진행률</div>
+      <div class="mt-2">
+        <div class="h-3 bg-slate-200 rounded overflow-hidden">
+          <div class="h-full {% if progress >= 100 %}bg-slate-400{% elif progress >= 80 %}bg-amber-500{% else %}bg-blue-500{% endif %}"
+               style="width: {{ progress }}%"></div>
+        </div>
+        <div class="text-xl font-bold font-mono mt-1">{{ progress }}%</div>
+      </div>
+    </div>
+  </div>
+
+  {# ── 기본 정보 ── #}
+  <section class="bg-white rounded-lg border border-slate-200 mb-6">
+    <div class="px-5 py-3 border-b border-slate-200">
+      <h3 class="font-semibold text-base">기본 정보</h3>
+    </div>
+    <dl class="grid grid-cols-2 gap-x-8 gap-y-3 p-5 text-sm">
+      <div><dt class="text-slate-500">코드</dt><dd class="font-mono mt-1">{{ p.code }}</dd></div>
+      <div><dt class="text-slate-500">상태</dt><dd class="mt-1">{{ p.get_status_display }}</dd></div>
+      <div class="col-span-2"><dt class="text-slate-500">프로젝트명</dt><dd class="mt-1 font-medium">{{ p.name }}</dd></div>
+      <div><dt class="text-slate-500">주관 본부</dt><dd class="mt-1">{{ p.division.name }}</dd></div>
+      <div><dt class="text-slate-500">주관 부서</dt><dd class="mt-1">{{ p.department.name|default:"-" }}</dd></div>
+      <div><dt class="text-slate-500">PM</dt><dd class="mt-1">{{ p.pm.name|default:"-" }}</dd></div>
+      <div><dt class="text-slate-500">유형</dt><dd class="mt-1">{{ p.get_kind_display }}</dd></div>
+      <div><dt class="text-slate-500">원가센터 유형</dt><dd class="mt-1">{{ p.get_cost_center_type_display }}</dd></div>
+      <div><dt class="text-slate-500">우선순위</dt><dd class="mt-1">{{ p.get_priority_display }}</dd></div>
+      <div><dt class="text-slate-500">기간</dt><dd class="mt-1">{{ p.start_date|date:"Y-m-d" }} ~ {{ p.end_date|date:"Y-m-d" }}</dd></div>
+      <div><dt class="text-slate-500">계획 공수 (M/M)</dt><dd class="mt-1">{{ p.planned_mm }}</dd></div>
+      <div><dt class="text-slate-500">고객</dt><dd class="mt-1">{{ p.customer|default:"-" }} ({{ p.get_customer_type_display }})</dd></div>
+      <div><dt class="text-slate-500">배분 대상</dt><dd class="mt-1">{% if p.is_allocatable %}예{% else %}아니오{% endif %}</dd></div>
+      <div><dt class="text-slate-500">배분 키</dt><dd class="mt-1">{{ p.get_allocation_key_display }}</dd></div>
+      <div><dt class="text-slate-500">승인자</dt><dd class="mt-1">{{ p.approved_by|default:"-" }}</dd></div>
+      <div><dt class="text-slate-500">승인일</dt><dd class="mt-1">{{ p.approved_at|date:"Y-m-d"|default:"-" }}</dd></div>
+    </dl>
+  </section>
+
+  {# ── 예산 분해 ── #}
+  <section class="bg-white rounded-lg border border-slate-200 mb-6">
+    <div class="px-5 py-3 border-b border-slate-200">
+      <h3 class="font-semibold text-base">원가 항목별 예산</h3>
+    </div>
+    <table class="w-full text-sm">
+      <thead class="bg-slate-50 text-xs text-slate-500">
+        <tr>
+          <th class="text-left px-4 py-2 font-medium">항목</th>
+          <th class="text-right px-4 py-2 font-medium">예산</th>
+          <th class="text-left px-4 py-2 font-medium">비고</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-slate-100">
+        {% for b in budgets %}
+          <tr>
+            <td class="px-4 py-2">{{ b.get_category_display }}</td>
+            <td class="px-4 py-2 text-right font-mono">{{ b.amount|floatformat:0|intcomma }}</td>
+            <td class="px-4 py-2 text-slate-500 text-xs">{{ b.memo }}</td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="3" class="text-center text-slate-400 py-4 text-sm">예산 분해가 등록되지 않았습니다.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+
+  {# ── 인력 투입 ── #}
+  <section class="bg-white rounded-lg border border-slate-200">
+    <div class="px-5 py-3 border-b border-slate-200">
+      <h3 class="font-semibold text-base">인력 투입 ({{ assignments|length }}명)</h3>
+    </div>
+    <table class="w-full text-sm">
+      <thead class="bg-slate-50 text-xs text-slate-500">
+        <tr>
+          <th class="text-left px-4 py-2 font-medium">사번</th>
+          <th class="text-left px-4 py-2 font-medium">이름</th>
+          <th class="text-left px-4 py-2 font-medium">소속 부서</th>
+          <th class="text-left px-4 py-2 font-medium">역할</th>
+          <th class="text-right px-4 py-2 font-medium">투입률</th>
+          <th class="text-left px-4 py-2 font-medium">투입 기간</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-slate-100">
+        {% for a in assignments %}
+          <tr>
+            <td class="px-4 py-2 font-mono text-xs">{{ a.employee.emp_no }}</td>
+            <td class="px-4 py-2">{{ a.employee.name }}</td>
+            <td class="px-4 py-2 text-xs text-slate-600">{{ a.employee.department.name }}</td>
+            <td class="px-4 py-2 text-xs">{{ a.role|default:"-" }}</td>
+            <td class="px-4 py-2 text-right font-mono">{{ a.allocation_pct }}%</td>
+            <td class="px-4 py-2 text-xs text-slate-500">
+              {{ a.period_from|date:"Y-m-d" }} ~ {{ a.period_to|date:"Y-m-d"|default:"진행중" }}
+            </td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="6" class="text-center text-slate-400 py-4 text-sm">투입된 인력이 없습니다.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+{% endblock %}
