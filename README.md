@@ -63,8 +63,9 @@ ClaudePrject/
 │   │   ├── costing.py      # 월 인건비 안분 + 표준원가 배분 엔진
 │   │   ├── models.py       # Portfolio·Product + Division·Department·Employee·Project·CostEntry·RevenueEntry·AllocationRule 등
 │   │   └── management/commands/
-│   │       ├── seed_costing_master.py   # 5본부/15부서/50명/20프로젝트 시드
-│   │       └── allocate_salary.py       # 월 인건비 안분 CLI
+│   │       ├── seed_costing_master.py         # 5본부/15부서/50명/20프로젝트 시드
+│   │       ├── seed_costing_transactions.py   # 4개월치 원가/매출/배분 트랜잭션 시드
+│   │       └── allocate_salary.py             # 월 인건비 안분 CLI
 │   ├── interfaces/       # 인터페이스 통합관리
 │   │   ├── protocols/      # REST/SOAP/MQ/SFTP/BATCH 어댑터
 │   │   └── models.py       # Interface, InterfaceLog
@@ -102,7 +103,8 @@ python manage.py migrate
 # 4. (선택) 시드 데이터 생성
 python manage.py seed_interfaces         # 인터페이스 샘플
 python manage.py seed_portfolios         # 포트폴리오·금융상품 샘플
-python manage.py seed_costing_master     # 원가/관리회계 (5본부/15부서/50명/20프로젝트)
+python manage.py seed_costing_master     # 원가/관리회계 마스터 (5본부/15부서/50명/20프로젝트)
+python manage.py seed_costing_transactions  # 원가/관리회계 4개월치 트랜잭션 (원가·매출·배분 확정)
 
 # 5. 관리자 계정 생성
 python manage.py createsuperuser
