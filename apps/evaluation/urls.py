@@ -42,6 +42,11 @@ urlpatterns = [
     path('costing/revenue/new/', views.costing_revenue_create, name='costing_revenue_create'),
     path('costing/revenue/<int:pk>/delete/', views.costing_revenue_delete, name='costing_revenue_delete'),
 
+    # 회계 기간 마감
+    path('costing/periods/', views.costing_periods, name='costing_periods'),
+    path('costing/periods/<str:period>/close/', views.costing_period_close, name='costing_period_close'),
+    path('costing/periods/<str:period>/reopen/', views.costing_period_reopen, name='costing_period_reopen'),
+
     # 표준원가 배분
     path('costing/allocation/rules/', views.allocation_rule_list, name='allocation_rules'),
     path('costing/allocation/rules/new/', views.allocation_rule_create, name='allocation_rule_create'),

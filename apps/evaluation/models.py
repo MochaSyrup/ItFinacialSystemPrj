@@ -3,6 +3,52 @@ from django.db import models
 
 
 # ============================================================
+# 원가/관리회계 — 예외 & 기간 마감
+# ============================================================
+
+class PeriodClosedError(RuntimeError):
+    """마감된 회계 기간에 쓰기를 시도했을 때"""
+
+
+class ImmutableEntryError(RuntimeError):
+    """Immutable 원장 항목을 수정하려 했을 때 — 보정은 역분개로"""
+
+
+class FiscalPeriod(models.Model):
+    """회계 기간 마감 상태.
+
+    - 레코드 없음 또는 is_closed=False → 쓰기 가능 (open)
+    - is_closed=True → CostEntry/RevenueEntry 생성·삭제 차단
+    - 마감 이후 추가 수정이 필요하면 먼저 재개(reopen) 해야 함
+    """
+    period = models.CharField(max_length=7, unique=True, help_text='YYYY-MM')
+    is_closed = models.BooleanField(default=False)
+    closed_at = models.DateTimeField(null=True, blank=True)
+    closed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='closed_periods',
+    )
+    note = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ['-period']
+        verbose_name = '회계 기간'
+        verbose_name_plural = '회계 기간'
+
+    def __str__(self):
+        return f'{self.period} {"CLOSED" if self.is_closed else "OPEN"}'
+
+
+def is_period_closed(period: str) -> bool:
+    return FiscalPeriod.objects.filter(period=period, is_closed=True).exists()
+
+
+def _ensure_period_writable(period: str):
+    if is_period_closed(period):
+        raise PeriodClosedError(f'{period} 는 마감된 기간입니다 — 재개(reopen) 후 쓰기 가능')
+
+
+# ============================================================
 # 원가/관리회계 — 조직 마스터
 # ============================================================
 
@@ -286,6 +332,25 @@ class CostEntry(models.Model):
     def __str__(self):
         return f'{self.period} {self.category.code} {self.amount}'
 
+    # ── 불변성 + 마감 가드 ──
+    # 보정은 reverses 역분개를 통해서만. 마감된 기간은 쓰기 금지.
+    # 시드/마이그레이션이 필요할 때는 _skip_period_check=True 로 우회.
+    def save(self, *args, **kwargs):
+        skip_period = kwargs.pop('_skip_period_check', False)
+        if self.pk is not None:
+            raise ImmutableEntryError(
+                'CostEntry 는 수정할 수 없습니다 (immutable). 보정이 필요하면 역분개(reverses) 하세요.'
+            )
+        if not skip_period:
+            _ensure_period_writable(self.period)
+        super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        skip_period = kwargs.pop('_skip_period_check', False)
+        if not skip_period:
+            _ensure_period_writable(self.period)
+        return super().delete(*args, **kwargs)
+
 
 class RevenueEntry(models.Model):
     """수익 원장 — 실현 매출. CostEntry와 같은 차원으로 P&L 매칭"""
@@ -318,6 +383,19 @@ class RevenueEntry(models.Model):
 
     def __str__(self):
         return f'{self.period} REV {self.amount}'
+
+    # ── 마감 가드 (RevenueEntry 는 수정 허용이 필요한 경우가 있어 immutable 까진 안 건다) ──
+    def save(self, *args, **kwargs):
+        skip_period = kwargs.pop('_skip_period_check', False)
+        if not skip_period:
+            _ensure_period_writable(self.period)
+        super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        skip_period = kwargs.pop('_skip_period_check', False)
+        if not skip_period:
+            _ensure_period_writable(self.period)
+        return super().delete(*args, **kwargs)
 
 
 class InternalTransfer(models.Model):

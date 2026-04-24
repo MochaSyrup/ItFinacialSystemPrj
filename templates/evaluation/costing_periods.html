@@ -1,0 +1,87 @@
+{% extends 'base.html' %}
+{% load humanize %}
+
+{% block content %}
+  <div class="mb-4 flex items-center justify-between">
+    <div class="text-xs text-slate-500">
+      원장에 발생한 모든 회계 기간. <b>마감된 기간은 CostEntry/RevenueEntry 생성·삭제·배분 확정/취소가 모두 차단</b>됩니다.
+      보정이 필요하면 먼저 재개(reopen) 해야 합니다.
+    </div>
+    <div class="flex items-center gap-2 text-xs">
+      <span class="px-2 py-1 rounded bg-green-100 text-green-700">OPEN {{ open_count }}</span>
+      <span class="px-2 py-1 rounded bg-slate-300 text-slate-700">CLOSED {{ closed_count }}</span>
+    </div>
+  </div>
+
+  <div class="bg-white rounded-lg border border-slate-200 overflow-hidden">
+    <table class="w-full text-sm">
+      <thead class="bg-slate-50 text-xs text-slate-500">
+        <tr>
+          <th class="text-left px-4 py-2 font-medium">기간</th>
+          <th class="text-left px-4 py-2 font-medium">상태</th>
+          <th class="text-right px-4 py-2 font-medium">원가 건수</th>
+          <th class="text-right px-4 py-2 font-medium">원가 합계</th>
+          <th class="text-right px-4 py-2 font-medium">수익 건수</th>
+          <th class="text-right px-4 py-2 font-medium">수익 합계</th>
+          <th class="text-left px-4 py-2 font-medium">마감 시각 / 담당</th>
+          <th class="text-right px-4 py-2 font-medium">작업</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-slate-100">
+        {% for r in rows %}
+          <tr class="hover:bg-slate-50">
+            <td class="px-4 py-2 font-mono">{{ r.period }}</td>
+            <td class="px-4 py-2">
+              {% if r.is_closed %}
+                <span class="px-2 py-0.5 text-xs rounded bg-slate-300 text-slate-700">
+                  <i class="bi bi-lock-fill"></i> CLOSED
+                </span>
+              {% else %}
+                <span class="px-2 py-0.5 text-xs rounded bg-green-100 text-green-700">
+                  <i class="bi bi-unlock"></i> OPEN
+                </span>
+              {% endif %}
+            </td>
+            <td class="px-4 py-2 text-right">{{ r.cost_count|intcomma }}</td>
+            <td class="px-4 py-2 text-right font-mono">{{ r.cost_amount|floatformat:0|intcomma }}</td>
+            <td class="px-4 py-2 text-right">{{ r.revenue_count|intcomma }}</td>
+            <td class="px-4 py-2 text-right font-mono">{{ r.revenue_amount|floatformat:0|intcomma }}</td>
+            <td class="px-4 py-2 text-xs text-slate-500">
+              {% if r.closed_at %}
+                {{ r.closed_at|date:"Y-m-d H:i" }}
+                {% if r.closed_by %}<br>{{ r.closed_by.username }}{% endif %}
+              {% else %}
+                —
+              {% endif %}
+            </td>
+            <td class="px-4 py-2 text-right whitespace-nowrap">
+              {% if r.is_closed %}
+                <form method="post"
+                      action="{% url 'evaluation:costing_period_reopen' r.period %}"
+                      class="inline"
+                      onsubmit="return confirm('{{ r.period }} 을(를) 재개하시겠습니까? 원장 쓰기 가능 상태가 됩니다.');">
+                  {% csrf_token %}
+                  <button type="submit" class="text-xs px-3 py-1 bg-amber-500 text-white rounded hover:bg-amber-600">
+                    <i class="bi bi-unlock"></i> 재개
+                  </button>
+                </form>
+              {% else %}
+                <form method="post"
+                      action="{% url 'evaluation:costing_period_close' r.period %}"
+                      class="inline"
+                      onsubmit="return confirm('{{ r.period }} 을(를) 마감하시겠습니까? 이후 원장 입력/삭제/배분 확정이 차단됩니다.');">
+                  {% csrf_token %}
+                  <button type="submit" class="text-xs px-3 py-1 bg-slate-700 text-white rounded hover:bg-slate-800">
+                    <i class="bi bi-lock"></i> 마감
+                  </button>
+                </form>
+              {% endif %}
+            </td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="8" class="p-6 text-center text-xs text-slate-400">아직 원장 데이터가 없습니다.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+{% endblock %}

@@ -25,6 +25,9 @@ COSTING_ALLOCATION_VIEWS = {
     'allocation_runs', 'allocation_run_simulate', 'allocation_run_detail',
     'allocation_run_commit', 'allocation_run_reverse', 'allocation_run_delete',
 }
+COSTING_PERIODS_VIEWS = {
+    'costing_periods', 'costing_period_close', 'costing_period_reopen',
+}
 
 
 def nav(request):
@@ -61,6 +64,8 @@ def nav(request):
             group = 'costing_revenue'
         elif current in COSTING_ALLOCATION_VIEWS:
             group = 'costing_allocation'
+        elif current in COSTING_PERIODS_VIEWS:
+            group = 'costing_periods'
 
     # 헤더 실패 뱃지 — 최근 15분 실패 카운트
     fail_count = 0

@@ -5,6 +5,8 @@ from decimal import Decimal
 from django.db import transaction
 from django.db.models import Q, Sum
 
+from django.utils import timezone
+
 from .models import (
     AllocationResult,
     AllocationRule,
@@ -13,9 +15,11 @@ from .models import (
     CostEntry,
     Department,
     Employee,
+    FiscalPeriod,
     Project,
     ProjectAssignment,
     RevenueEntry,
+    _ensure_period_writable,
 )
 
 
@@ -70,6 +74,7 @@ def allocate_monthly_salary(period: str, *, reset: bool = False, created_by=None
 
     Returns: {'created': N, 'skipped': N, 'reset_deleted': N, 'period': str}
     """
+    _ensure_period_writable(period)
     ensure_default_categories()
     labor_cat = CostCategory.objects.get(code='LABOR')
     target_date = parse_period(period)
@@ -321,6 +326,7 @@ def commit_allocation(run: AllocationRun, *, user=None) -> dict:
     """SIMULATED → COMMITTED. 각 결과별로 CostEntry(source=ALLOCATION) 생성 + 출발부서 상쇄(-) 1건"""
     if run.status != AllocationRun.Status.SIMULATED:
         raise ValueError(f'이미 {run.get_status_display()} 상태입니다.')
+    _ensure_period_writable(run.period)
 
     target_date = parse_period(run.period)
     created = 0
@@ -391,6 +397,7 @@ def reverse_allocation(run: AllocationRun) -> dict:
     """COMMITTED → REVERSED. 생성된 CostEntry(결과 + offset) 를 모두 삭제하고 상태 변경"""
     if run.status != AllocationRun.Status.COMMITTED:
         raise ValueError(f'확정 상태만 취소할 수 있습니다 (현재: {run.get_status_display()})')
+    _ensure_period_writable(run.period)
     deleted = 0
     for res in run.results.select_related('cost_entry').all():
         if res.cost_entry_id:
@@ -403,3 +410,56 @@ def reverse_allocation(run: AllocationRun) -> dict:
     run.status = AllocationRun.Status.REVERSED
     run.save(update_fields=['status'])
     return {'deleted': deleted, 'offset_deleted': offset_deleted, 'run_id': run.pk}
+
+
+# ============================================================
+# 회계 기간 마감 / 재개
+# ============================================================
+
+def close_period(period: str, *, user=None, note: str = '') -> FiscalPeriod:
+    """해당 기간을 마감. 이후 CostEntry/RevenueEntry 생성·삭제 차단."""
+    fp, _ = FiscalPeriod.objects.get_or_create(period=period)
+    fp.is_closed = True
+    fp.closed_at = timezone.now()
+    fp.closed_by = user
+    if note:
+        fp.note = note
+    fp.save()
+    return fp
+
+
+def reopen_period(period: str, *, user=None, note: str = '') -> FiscalPeriod:
+    """마감을 해제. 감사 목적으로 closed_by/closed_at 은 보존하지 않고 초기화."""
+    fp = FiscalPeriod.objects.filter(period=period).first()
+    if not fp:
+        return None
+    fp.is_closed = False
+    fp.closed_at = None
+    fp.closed_by = user  # 마지막 재개자로 덮어쓰기 (감사용)
+    if note:
+        fp.note = (fp.note + '\n' if fp.note else '') + f'[REOPEN] {note}'
+    fp.save()
+    return fp
+
+
+def period_summary(period: str) -> dict:
+    """기간 마감 화면용 요약 — 원장 건수/금액 + 현재 상태"""
+    from django.db.models import Count, Sum
+    cost_agg = CostEntry.objects.filter(period=period).aggregate(
+        n=Count('id'), amount=Sum('amount'),
+    )
+    rev_agg = RevenueEntry.objects.filter(period=period).aggregate(
+        n=Count('id'), amount=Sum('amount'),
+    )
+    fp = FiscalPeriod.objects.filter(period=period).first()
+    return {
+        'period': period,
+        'is_closed': bool(fp and fp.is_closed),
+        'closed_at': fp.closed_at if fp else None,
+        'closed_by': fp.closed_by if fp else None,
+        'note': fp.note if fp else '',
+        'cost_count': cost_agg['n'] or 0,
+        'cost_amount': cost_agg['amount'] or 0,
+        'revenue_count': rev_agg['n'] or 0,
+        'revenue_amount': rev_agg['amount'] or 0,
+    }

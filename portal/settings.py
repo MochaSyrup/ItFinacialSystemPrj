@@ -136,3 +136,18 @@ STATICFILES_DIRS = [BASE_DIR / 'static']
 # https://docs.djangoproject.com/en/5.1/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+
+# ── 인터페이스 실행 모드 ─────────────────────────────────────
+# True  : 실제 어댑터 (requests / zeep / paramiko / subprocess / pika) 호출
+# False : Mock 응답 (개발·데모·테스트 기본)
+# 인터페이스별 override: config_json 에 "live": true/false 키로 개별 지정 가능
+INTERFACE_LIVE_MODE = False
+
+# 실제 호출 시 공통 제한
+INTERFACE_HTTP_TIMEOUT = 30           # REST/SOAP 타임아웃 (초)
+INTERFACE_SFTP_TIMEOUT = 30           # SFTP 연결 타임아웃 (초)
+INTERFACE_BATCH_TIMEOUT = 3600        # BATCH 최대 실행 시간 (초)
+INTERFACE_RESPONSE_MAX_CHARS = 4000   # response/request summary 저장 길이 제한
+INTERFACE_RETRY_MAX = 1               # 실패 시 재시도 횟수 (0=재시도 없음)
+INTERFACE_RETRY_BACKOFF = 0.5         # 재시도 대기 (초, 지수 증가)

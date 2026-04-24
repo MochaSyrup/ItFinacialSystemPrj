@@ -28,7 +28,10 @@ from .forms import (
 )
 from .costing import (
     allocate_monthly_salary,
+    close_period,
     commit_allocation,
+    period_summary,
+    reopen_period,
     reverse_allocation,
     simulate_allocation,
 )
@@ -42,6 +45,9 @@ from .models import (
     Division,
     Employee,
     FinancialProduct,
+    FiscalPeriod,
+    PeriodClosedError,
+    ImmutableEntryError,
     Portfolio,
     Project,
     ProjectAssignment,
@@ -784,9 +790,13 @@ def costing_ledger_create(request):
             obj.source = CostEntry.Source.MANUAL
             if request.user.is_authenticated:
                 obj.created_by = request.user
-            obj.save()
-            messages.success(request, f'원가 1건 등록 완료 ({obj.period} {obj.category.code} {obj.amount:,})')
-            return redirect('evaluation:costing_ledger')
+            try:
+                obj.save()
+            except PeriodClosedError as e:
+                messages.error(request, str(e))
+            else:
+                messages.success(request, f'원가 1건 등록 완료 ({obj.period} {obj.category.code} {obj.amount:,})')
+                return redirect('evaluation:costing_ledger')
     else:
         form = CostEntryForm()
     return render(request, 'evaluation/costing_ledger_form.html', {
@@ -861,9 +871,13 @@ def costing_revenue_create(request):
             obj = form.save(commit=False)
             if request.user.is_authenticated:
                 obj.created_by = request.user
-            obj.save()
-            messages.success(request, f'수익 1건 등록 완료 ({obj.period} {obj.amount:,})')
-            return redirect('evaluation:costing_revenue')
+            try:
+                obj.save()
+            except PeriodClosedError as e:
+                messages.error(request, str(e))
+            else:
+                messages.success(request, f'수익 1건 등록 완료 ({obj.period} {obj.amount:,})')
+                return redirect('evaluation:costing_revenue')
     else:
         form = RevenueEntryForm()
     return render(request, 'evaluation/costing_revenue_form.html', {
@@ -876,8 +890,12 @@ def costing_revenue_create(request):
 @require_POST
 def costing_revenue_delete(request, pk):
     r = get_object_or_404(RevenueEntry, pk=pk)
-    r.delete()
-    messages.success(request, f'수익 #{pk} 삭제 완료')
+    try:
+        r.delete()
+    except PeriodClosedError as e:
+        messages.error(request, str(e))
+    else:
+        messages.success(request, f'수익 #{pk} 삭제 완료')
     return redirect('evaluation:costing_revenue')
 
 
@@ -1031,7 +1049,7 @@ def allocation_run_commit(request, pk):
     try:
         result = commit_allocation(run, user=user)
         messages.success(request, f'Run #{run.pk} 확정 완료 — CostEntry {result["created"]}건 생성')
-    except ValueError as e:
+    except (ValueError, PeriodClosedError) as e:
         messages.error(request, str(e))
     return redirect('evaluation:allocation_run_detail', pk=run.pk)
 
@@ -1042,7 +1060,7 @@ def allocation_run_reverse(request, pk):
     try:
         result = reverse_allocation(run)
         messages.success(request, f'Run #{run.pk} 취소 완료 — CostEntry {result["deleted"]}건 삭제')
-    except ValueError as e:
+    except (ValueError, PeriodClosedError) as e:
         messages.error(request, str(e))
     return redirect('evaluation:allocation_run_detail', pk=run.pk)
 
@@ -1065,21 +1083,25 @@ def costing_ledger_allocate(request):
         form = AllocateSalaryForm(request.POST)
         if form.is_valid():
             user = request.user if request.user.is_authenticated else None
-            result = allocate_monthly_salary(
-                form.cleaned_data['period'],
-                reset=form.cleaned_data.get('reset', False),
-                created_by=user,
-            )
-            messages.success(
-                request,
-                f"[{result['period']}] 안분 완료 — 생성 {result['created']}건 / "
-                f"스킵 {result['skipped']}건 / 리셋삭제 {result['reset_deleted']}건"
-            )
-            from django.urls import reverse
-            base = reverse('evaluation:costing_ledger')
-            return HttpResponseRedirect(
-                f"{base}?period_from={result['period']}&period_to={result['period']}&source=SALARY"
-            )
+            try:
+                result = allocate_monthly_salary(
+                    form.cleaned_data['period'],
+                    reset=form.cleaned_data.get('reset', False),
+                    created_by=user,
+                )
+            except PeriodClosedError as e:
+                messages.error(request, str(e))
+            else:
+                messages.success(
+                    request,
+                    f"[{result['period']}] 안분 완료 — 생성 {result['created']}건 / "
+                    f"스킵 {result['skipped']}건 / 리셋삭제 {result['reset_deleted']}건"
+                )
+                from django.urls import reverse
+                base = reverse('evaluation:costing_ledger')
+                return HttpResponseRedirect(
+                    f"{base}?period_from={result['period']}&period_to={result['period']}&source=SALARY"
+                )
     else:
         form = AllocateSalaryForm()
     return render(request, 'evaluation/costing_ledger_allocate.html', {
@@ -1088,3 +1110,49 @@ def costing_ledger_allocate(request):
         'form': form,
         'result': result,
     })
+
+
+# ============================================================
+# 회계 기간 마감 관리
+# ============================================================
+
+def costing_periods(request):
+    """기간 목록 — 원장에 등장한 모든 period 를 나열하고 마감 상태/요약 표시"""
+    # 원장에서 distinct period 추출 (수동 입력, 안분, 배분 모두 포함)
+    cost_periods = CostEntry.objects.values_list('period', flat=True).distinct()
+    rev_periods = RevenueEntry.objects.values_list('period', flat=True).distinct()
+    all_periods = sorted(set(cost_periods) | set(rev_periods), reverse=True)
+
+    # 레코드는 없어도 FiscalPeriod 에 등록돼 있으면 함께 노출
+    fp_only = FiscalPeriod.objects.values_list('period', flat=True)
+    all_periods = sorted(set(all_periods) | set(fp_only), reverse=True)
+
+    rows = [period_summary(p) for p in all_periods]
+    open_count = sum(1 for r in rows if not r['is_closed'])
+    return render(request, 'evaluation/costing_periods.html', {
+        'page_title': '회계 기간 마감',
+        'page_subtitle': '원가/관리회계 / 기간 마감 관리',
+        'rows': rows,
+        'open_count': open_count,
+        'closed_count': len(rows) - open_count,
+    })
+
+
+@require_POST
+def costing_period_close(request, period):
+    user = request.user if request.user.is_authenticated else None
+    note = request.POST.get('note', '').strip()
+    close_period(period, user=user, note=note)
+    messages.success(request, f'{period} 마감 완료 — 이후 원장 입력/삭제가 차단됩니다.')
+    return redirect('evaluation:costing_periods')
+
+
+@require_POST
+def costing_period_reopen(request, period):
+    user = request.user if request.user.is_authenticated else None
+    note = request.POST.get('note', '').strip()
+    if not reopen_period(period, user=user, note=note):
+        messages.warning(request, f'{period} 은 마감 이력이 없습니다.')
+    else:
+        messages.success(request, f'{period} 재개 완료 — 원장 쓰기 가능.')
+    return redirect('evaluation:costing_periods')

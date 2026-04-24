@@ -184,3 +184,57 @@ class ListPaginationTests(TestCase):
         resp = self.client.get(reverse('interfaces:list'))
         self.assertEqual(resp.status_code, 200)
         self.assertContains(resp, '1 / 2')
+
+
+class AdapterModeDispatchTests(TestCase):
+    """live/mock 전환 로직 검증 — 실제 네트워크 호출 없이 dispatch 만 확인"""
+
+    def test_per_interface_live_flag_overrides_settings(self):
+        from apps.interfaces.protocols.base import ProtocolAdapter
+        adapter = ProtocolAdapter(code='TEST')
+        iface_mock = Interface(config_json={'live': False})
+        iface_live = Interface(config_json={'live': True})
+        # 전역이 꺼져 있어도 interface.live=True 면 live
+        self.assertTrue(adapter._is_live(iface_live))
+        self.assertFalse(adapter._is_live(iface_mock))
+
+    def test_missing_lib_falls_back_to_mock_with_note(self):
+        """_execute_live 가 AdapterLibraryMissing 을 던지면 mock 으로 폴백"""
+        from apps.interfaces.protocols.base import AdapterLibraryMissing, ProtocolAdapter
+
+        class _Broken(ProtocolAdapter):
+            code = 'X'
+            def _execute_live(self, interface):
+                raise AdapterLibraryMissing('fake-lib 미설치')
+
+        adapter = _Broken()
+        iface = Interface.objects.create(
+            code='IF_FB', name='fb', protocol='REST',
+            config_json={'live': True},
+        )
+        result = adapter.execute(iface)
+        # mock 으로 실행되었으므로 latency 가 잡혀 있음
+        self.assertIsNotNone(result.latency_ms)
+        # fallback 메모가 error 에 달려 있거나 비어 있음 (성공 케이스)
+        if not result.success:
+            self.assertIn('live 모드 fallback', result.error)
+
+    def test_response_summary_truncated(self):
+        """INTERFACE_RESPONSE_MAX_CHARS 초과분이 잘리는지"""
+        from django.test import override_settings
+        from apps.interfaces.protocols.base import ExecutionResult, ProtocolAdapter
+
+        class _Bloated(ProtocolAdapter):
+            code = 'Y'
+            def _execute_mock(self, interface):
+                return ExecutionResult(
+                    success=True, latency_ms=10,
+                    request_summary='req',
+                    response_summary='A' * 8000,
+                )
+
+        iface = Interface.objects.create(code='IF_BIG', name='big', protocol='REST')
+        with override_settings(INTERFACE_RESPONSE_MAX_CHARS=1000, INTERFACE_RETRY_MAX=0):
+            result = _Bloated().execute(iface)
+        self.assertLess(len(result.response_summary), 1200)
+        self.assertIn('truncated', result.response_summary)
