@@ -7,11 +7,20 @@
 ### 1. 인터페이스 통합관리 (`/interfaces/`)
 - 지원 프로토콜: **REST API, SOAP, MQ, SFTP/FTP, Batch**
 - 인터페이스 등록 / 설정 / 활성화 토글 / 수동 실행
-- 호출 로그 조회 및 실패 건 재처리
+- **구조화 입력 폼** — 프로토콜별 개별 필드 (REST method/auth/headers·query, SOAP wsdl/operation, MQ queue_manager/queue/channel, SFTP host/port/user, BATCH script/args). JSON 직접 편집 없음, 저장 시 `config_json` 자동 조립
+- **cron 5필드 validator** — 스케줄 입력 검증 (`*`, `a-b`, `*/n`, 쉼표 목록, 필드별 범위 체크)
+- **인터페이스 상세 페이지** (`/interfaces/<pk>/`) — KPI(성공률/평균 응답시간) + 민감 키 마스킹된 config + 최근 20건 실행 로그
+- 목록 페이징 (25건/page), 키워드/프로토콜 필터
+- 호출 로그 조회 및 **실패 건 일괄 재처리** — 선택/전체 모드, 동일 인터페이스 중복 자동 병합 (최대 100건)
 - 프로토콜별 어댑터 구조 (`apps/interfaces/protocols/`)
 
 ### 2. 금융상품 평가 (`/evaluation/`)
 - 평가 대상: **주식, 채권, 파생상품, 프로젝트 사업**
+- **구조화 등록 폼** — 종류별 개별 필드 입력, 저장 시 `metrics_json` 자동 조립
+  - 주식: 현재가 / 보유수량 / 연 변동성 σ
+  - 채권: par / 쿠폰금리 / YTM / 만기(년)
+  - 파생: notional / 레버리지 / 변동성 / 기준가
+  - 프로젝트: 할인율 / 현금흐름 (쉼표·줄바꿈 구분, t=0 투자 음수)
 - 산출 지표:
   - 주식: 파라메트릭 VaR (95%, 1d), Historical VaR, 연 변동성
   - 채권: 가격, Macaulay Duration, Convexity, YTM 시계열
@@ -73,6 +82,8 @@ ClaudePrject/
 │   │       └── allocate_salary.py             # 월 인건비 안분 CLI
 │   ├── interfaces/       # 인터페이스 통합관리
 │   │   ├── protocols/      # REST/SOAP/MQ/SFTP/BATCH 어댑터
+│   │   ├── forms.py        # 프로토콜별 구조화 폼 + cron validator
+│   │   ├── utils.py        # 민감 키 마스킹 (mask_config)
 │   │   └── models.py       # Interface, InterfaceLog
 │   └── monitoring/       # 대시보드
 ├── portal/               # Django 프로젝트 설정
@@ -132,8 +143,10 @@ python manage.py allocate_salary 2026-04 --reset   # 기존 SALARY 항목 삭제
 | 경로 | 설명 |
 |---|---|
 | `/` | 모니터링 대시보드 |
-| `/interfaces/` | 인터페이스 목록 |
-| `/interfaces/new/` | 인터페이스 등록 |
+| `/interfaces/` | 인터페이스 목록 (페이징·필터) |
+| `/interfaces/new/` | 인터페이스 등록 (프로토콜별 구조화 폼) |
+| `/interfaces/<pk>/` | 인터페이스 상세 (KPI + 마스킹 config + 최근 로그) |
+| `/interfaces/execute/` | 수동 실행 · 실패 일괄 재시도 |
 | `/interfaces/logs/` | 호출 로그 |
 | `/evaluation/portfolios/` | 포트폴리오 목록 |
 | `/evaluation/products/` | 금융상품 목록 |

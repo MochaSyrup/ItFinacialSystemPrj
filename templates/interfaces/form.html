@@ -1,46 +1,178 @@
 {% extends 'base.html' %}
 
 {% block content %}
-  <div class="max-w-2xl">
+  <div class="max-w-3xl">
     <form method="post" class="bg-white rounded-lg border border-slate-200 p-6 space-y-5">
       {% csrf_token %}
 
       {% if form.non_field_errors %}
         <div class="p-3 text-sm bg-red-50 border border-red-200 text-red-700 rounded">
-          {{ form.non_field_errors }}
+          {{ form.non_field_errors|striptags }}
         </div>
       {% endif %}
 
-      {% for field in form %}
-        {% if field.name == 'is_active' %}
-          <div class="flex items-center gap-2">
-            {{ field }}
-            <label for="{{ field.id_for_label }}" class="text-sm">활성화</label>
-            {% if field.errors %}<span class="text-xs text-red-600">{{ field.errors|striptags }}</span>{% endif %}
+      {# ── 공통 필드 ── #}
+      <div class="grid grid-cols-2 gap-4">
+        {% for field in form %}
+          {% if field.name in 'code,name,protocol,operation_type,target_system,endpoint' %}
+            <div>
+              <label for="{{ field.id_for_label }}" class="block text-xs font-medium text-slate-600 mb-1">
+                {{ field.label }}{% if field.field.required %} <span class="text-red-500">*</span>{% endif %}
+              </label>
+              {{ field }}
+              {% if field.help_text %}<div class="text-[11px] text-slate-400 mt-1">{{ field.help_text }}</div>{% endif %}
+              {% if field.errors %}<div class="text-xs text-red-600 mt-1">{{ field.errors|striptags }}</div>{% endif %}
+            </div>
+          {% endif %}
+        {% endfor %}
+      </div>
+
+      {# ── 스케줄 (BATCH/SFTP 만) ── #}
+      <div id="schedule-cron-wrap">
+        <label for="{{ form.schedule_cron.id_for_label }}" class="block text-xs font-medium text-slate-600 mb-1">
+          {{ form.schedule_cron.label }}
+        </label>
+        {{ form.schedule_cron }}
+        <div class="text-[11px] text-slate-400 mt-1">{{ form.schedule_cron.help_text }}</div>
+        {% if form.schedule_cron.errors %}<div class="text-xs text-red-600 mt-1">{{ form.schedule_cron.errors|striptags }}</div>{% endif %}
+      </div>
+
+      {# ── 프로토콜별 구조화 입력 ── #}
+      <div class="pt-4 mt-2 border-t border-slate-200">
+        <h4 class="text-sm font-semibold mb-3 flex items-center gap-2">
+          <i class="bi bi-sliders"></i> 프로토콜 설정
+          <span id="protocol-hint" class="ml-2 text-xs font-normal text-slate-500"></span>
+        </h4>
+
+        {# REST #}
+        <div class="protocol-group space-y-3" data-protocol="REST">
+          <div class="grid grid-cols-3 gap-4">
+            <div>
+              <label class="block text-xs font-medium text-slate-600 mb-1">{{ form.rest_method.label }}</label>
+              {{ form.rest_method }}
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-slate-600 mb-1">{{ form.rest_auth_type.label }}</label>
+              {{ form.rest_auth_type }}
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-slate-600 mb-1">{{ form.rest_timeout_sec.label }}</label>
+              {{ form.rest_timeout_sec }}
+            </div>
           </div>
-        {% else %}
-          <div {% if field.name == 'schedule_cron' %}id="schedule-cron-wrap"{% endif %}>
-            <label for="{{ field.id_for_label }}" class="block text-xs font-medium text-slate-600 mb-1">
-              {{ field.label }}{% if field.field.required %} <span class="text-red-500">*</span>{% endif %}
-            </label>
-            {{ field }}
-            {% if field.name == 'config_json_text' %}
-              <div class="mt-2 flex items-center gap-2 flex-wrap">
-                <span class="text-[11px] text-slate-500">프로토콜별 예시 채우기:</span>
-                {% for key, hint in protocol_config_hints.items %}
-                  <button type="button"
-                          data-fill-config="{{ key }}"
-                          class="text-[11px] px-2 py-0.5 border border-slate-300 rounded hover:bg-slate-100">
-                    {{ key }}
-                  </button>
-                {% endfor %}
-              </div>
-            {% endif %}
-            {% if field.help_text %}<div class="text-[11px] text-slate-400 mt-1">{{ field.help_text }}</div>{% endif %}
-            {% if field.errors %}<div class="text-xs text-red-600 mt-1">{{ field.errors|striptags }}</div>{% endif %}
+          <div class="grid grid-cols-3 gap-4">
+            <div>
+              <label class="block text-xs font-medium text-slate-600 mb-1">{{ form.rest_auth_token.label }}</label>
+              {{ form.rest_auth_token }}
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-slate-600 mb-1">{{ form.rest_auth_user.label }}</label>
+              {{ form.rest_auth_user }}
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-slate-600 mb-1">{{ form.rest_auth_pass.label }}</label>
+              {{ form.rest_auth_pass }}
+            </div>
           </div>
-        {% endif %}
-      {% endfor %}
+          <div>
+            <label class="block text-xs font-medium text-slate-600 mb-1">{{ form.rest_headers_text.label }}</label>
+            {{ form.rest_headers_text }}
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-600 mb-1">{{ form.rest_query_params_text.label }}</label>
+            {{ form.rest_query_params_text }}
+          </div>
+        </div>
+
+        {# SOAP #}
+        <div class="protocol-group space-y-3" data-protocol="SOAP">
+          <div class="grid grid-cols-2 gap-4">
+            <div>
+              <label class="block text-xs font-medium text-slate-600 mb-1">{{ form.soap_wsdl.label }}</label>
+              {{ form.soap_wsdl }}
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-slate-600 mb-1">{{ form.soap_operation.label }}</label>
+              {{ form.soap_operation }}
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-slate-600 mb-1">{{ form.soap_auth_user.label }}</label>
+              {{ form.soap_auth_user }}
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-slate-600 mb-1">{{ form.soap_auth_pass.label }}</label>
+              {{ form.soap_auth_pass }}
+            </div>
+          </div>
+        </div>
+
+        {# MQ #}
+        <div class="protocol-group grid grid-cols-2 gap-4" data-protocol="MQ">
+          <div>
+            <label class="block text-xs font-medium text-slate-600 mb-1">{{ form.mq_queue_manager.label }} <span class="text-red-500">*</span></label>
+            {{ form.mq_queue_manager }}
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-600 mb-1">{{ form.mq_queue.label }} <span class="text-red-500">*</span></label>
+            {{ form.mq_queue }}
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-600 mb-1">{{ form.mq_channel.label }} <span class="text-red-500">*</span></label>
+            {{ form.mq_channel }}
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-600 mb-1">{{ form.mq_save_to_table.label }}</label>
+            {{ form.mq_save_to_table }}
+          </div>
+        </div>
+
+        {# SFTP #}
+        <div class="protocol-group grid grid-cols-3 gap-4" data-protocol="SFTP">
+          <div>
+            <label class="block text-xs font-medium text-slate-600 mb-1">{{ form.sftp_host.label }} <span class="text-red-500">*</span></label>
+            {{ form.sftp_host }}
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-600 mb-1">{{ form.sftp_port.label }}</label>
+            {{ form.sftp_port }}
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-600 mb-1">{{ form.sftp_user.label }} <span class="text-red-500">*</span></label>
+            {{ form.sftp_user }}
+          </div>
+          <div class="col-span-2">
+            <label class="block text-xs font-medium text-slate-600 mb-1">{{ form.sftp_remote_path.label }} <span class="text-red-500">*</span></label>
+            {{ form.sftp_remote_path }}
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-600 mb-1">{{ form.sftp_file_pattern.label }}</label>
+            {{ form.sftp_file_pattern }}
+          </div>
+        </div>
+
+        {# BATCH #}
+        <div class="protocol-group space-y-3" data-protocol="BATCH">
+          <div class="grid grid-cols-3 gap-4">
+            <div class="col-span-2">
+              <label class="block text-xs font-medium text-slate-600 mb-1">{{ form.batch_script.label }} <span class="text-red-500">*</span></label>
+              {{ form.batch_script }}
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-slate-600 mb-1">{{ form.batch_timeout_sec.label }}</label>
+              {{ form.batch_timeout_sec }}
+            </div>
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-600 mb-1">{{ form.batch_args_text.label }}</label>
+            {{ form.batch_args_text }}
+          </div>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-2">
+        {{ form.is_active }}
+        <label for="{{ form.is_active.id_for_label }}" class="text-sm">활성화</label>
+      </div>
 
       <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
         <a href="{% url 'interfaces:list' %}" class="text-sm px-4 py-2 text-slate-600 hover:bg-slate-100 rounded">취소</a>
@@ -49,22 +181,30 @@
         </button>
       </div>
     </form>
+
+    <div class="mt-3 text-[11px] text-slate-500 bg-slate-50 border border-slate-200 rounded p-3">
+      <div class="font-semibold mb-1">프로토콜별 안내</div>
+      <ul class="space-y-0.5">
+        {% for k, hint in protocol_config_hints.items %}
+          <li><b class="text-slate-700">{{ k }}</b> — {{ hint }}</li>
+        {% endfor %}
+      </ul>
+    </div>
   </div>
 
-  {{ protocol_config_hints|json_script:"config-hints" }}
   {{ protocol_operations|json_script:"protocol-ops" }}
+  <script id="protocol-hints-json" type="application/json">{{ protocol_hints_json|safe }}</script>
   <script>
     (function () {
-      const hints = JSON.parse(document.getElementById('config-hints').textContent);
       const opsByProtocol = JSON.parse(document.getElementById('protocol-ops').textContent);
-      const textarea = document.getElementById('id_config_json_text');
+      const hints = JSON.parse(document.getElementById('protocol-hints-json').textContent);
       const protocolSelect = document.getElementById('id_protocol');
       const opSelect = document.getElementById('id_operation_type');
       const cronWrap = document.getElementById('schedule-cron-wrap');
+      const protocolHint = document.getElementById('protocol-hint');
 
-      // operation_type 선택지 전체를 저장 (초기 렌더된 <option> 들)
       const allOps = Array.from(opSelect ? opSelect.options : []).map(o => ({
-        value: o.value, text: o.textContent
+        value: o.value, text: o.textContent,
       }));
 
       function filterOperations(protocol, keepSelection) {
@@ -90,34 +230,29 @@
 
       function toggleSchedule(protocol) {
         if (!cronWrap) return;
-        const needsSchedule = (protocol === 'BATCH' || protocol === 'SFTP');
-        cronWrap.style.display = needsSchedule ? '' : 'none';
+        const needs = (protocol === 'BATCH' || protocol === 'SFTP');
+        cronWrap.style.display = needs ? '' : 'none';
+      }
+
+      function toggleProtocolGroups(protocol) {
+        document.querySelectorAll('.protocol-group').forEach(el => {
+          el.style.display = el.dataset.protocol === protocol ? '' : 'none';
+        });
+        if (protocolHint) protocolHint.textContent = hints[protocol] || '';
+      }
+
+      function updateAll(protocol, keep) {
+        filterOperations(protocol, keep);
+        toggleSchedule(protocol);
+        toggleProtocolGroups(protocol);
       }
 
       if (protocolSelect) {
-        // 초기 렌더 (저장된 값 유지)
-        filterOperations(protocolSelect.value, true);
-        toggleSchedule(protocolSelect.value);
-
+        updateAll(protocolSelect.value, true);
         protocolSelect.addEventListener('change', function () {
-          filterOperations(protocolSelect.value, false);
-          toggleSchedule(protocolSelect.value);
+          updateAll(protocolSelect.value, false);
         });
       }
-
-      document.querySelectorAll('[data-fill-config]').forEach(function (btn) {
-        btn.addEventListener('click', function () {
-          const key = btn.getAttribute('data-fill-config');
-          if (hints[key] && textarea) {
-            textarea.value = hints[key];
-            if (protocolSelect) {
-              protocolSelect.value = key;
-              filterOperations(key, false);
-              toggleSchedule(key);
-            }
-          }
-        });
-      });
     })();
   </script>
 {% endblock %}

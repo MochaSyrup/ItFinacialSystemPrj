@@ -1,3 +1,4 @@
+import json
 from collections import Counter
 from decimal import Decimal
 
@@ -236,6 +237,7 @@ def product_create(request):
         'page_subtitle': '금융상품 평가 / 신규 등록',
         'form': form, 'mode': 'create',
         'kind_hints': KIND_HINTS,
+        'kind_hints_json': json.dumps(KIND_HINTS, ensure_ascii=False),
     })
 
 
@@ -254,6 +256,7 @@ def product_update(request, pk):
         'page_subtitle': '금융상품 평가 / 수정',
         'form': form, 'mode': 'update', 'obj': obj,
         'kind_hints': KIND_HINTS,
+        'kind_hints_json': json.dumps(KIND_HINTS, ensure_ascii=False),
     })
 
 

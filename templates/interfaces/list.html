@@ -56,7 +56,9 @@
       <tbody class="divide-y divide-slate-100">
         {% for obj in interfaces %}
           <tr class="hover:bg-slate-50">
-            <td class="px-4 py-2 font-mono text-xs text-slate-700">{{ obj.code }}</td>
+            <td class="px-4 py-2 font-mono text-xs text-slate-700">
+              <a href="{% url 'interfaces:detail' obj.pk %}" class="text-blue-700 hover:underline">{{ obj.code }}</a>
+            </td>
             <td class="px-4 py-2">{{ obj.name }}</td>
             <td class="px-4 py-2">
               <span class="px-2 py-0.5 text-xs
@@ -94,5 +96,28 @@
         {% endfor %}
       </tbody>
     </table>
+
+    {% if page_obj.paginator.num_pages > 1 %}
+      <div class="flex items-center justify-between px-4 py-3 border-t border-slate-200 text-xs text-slate-600">
+        <div>
+          {{ page_obj.start_index }}–{{ page_obj.end_index }} / 전체 {{ total }}건
+        </div>
+        <div class="flex items-center gap-1">
+          {% if page_obj.has_previous %}
+            <a href="?page={{ page_obj.previous_page_number }}{% if base_qs %}&{{ base_qs }}{% endif %}"
+               class="px-2 py-1 border border-slate-300 rounded hover:bg-slate-50">이전</a>
+          {% else %}
+            <span class="px-2 py-1 border border-slate-200 rounded text-slate-300">이전</span>
+          {% endif %}
+          <span class="px-3">{{ page_obj.number }} / {{ page_obj.paginator.num_pages }}</span>
+          {% if page_obj.has_next %}
+            <a href="?page={{ page_obj.next_page_number }}{% if base_qs %}&{{ base_qs }}{% endif %}"
+               class="px-2 py-1 border border-slate-300 rounded hover:bg-slate-50">다음</a>
+          {% else %}
+            <span class="px-2 py-1 border border-slate-200 rounded text-slate-300">다음</span>
+          {% endif %}
+        </div>
+      </div>
+    {% endif %}
   </div>
 {% endblock %}

@@ -1,27 +1,111 @@
 {% extends 'base.html' %}
 
 {% block content %}
-  <div class="max-w-2xl">
+  <div class="max-w-3xl">
     <form method="post" class="bg-white rounded-lg border border-slate-200 p-6 space-y-5">
       {% csrf_token %}
-      {% for field in form %}
-        <div>
-          <label for="{{ field.id_for_label }}" class="block text-xs font-medium text-slate-600 mb-1">
-            {{ field.label }}{% if field.field.required %} <span class="text-red-500">*</span>{% endif %}
-          </label>
-          {{ field }}
-          {% if field.help_text %}<div class="text-[11px] text-slate-400 mt-1">{{ field.help_text }}</div>{% endif %}
-          {% if field.errors %}<div class="text-xs text-red-600 mt-1">{{ field.errors|striptags }}</div>{% endif %}
+      {% if form.non_field_errors %}
+        <div class="px-3 py-2 rounded text-sm bg-red-50 text-red-700 border border-red-200">
+          {{ form.non_field_errors|striptags }}
         </div>
-      {% endfor %}
+      {% endif %}
 
-      <div class="bg-slate-50 border border-slate-200 rounded p-3 text-xs text-slate-600">
-        <div class="font-semibold text-slate-700 mb-2">종류별 JSON 예시</div>
-        <ul class="space-y-1 font-mono text-[11px]">
-          {% for k, hint in kind_hints.items %}
-            <li><b class="text-slate-700">{{ k }}</b> — {{ hint }}</li>
-          {% endfor %}
-        </ul>
+      {# ── 공통 필드 ── #}
+      <div class="grid grid-cols-2 gap-4">
+        {% for field in form %}
+          {% if field.name in 'portfolio,kind,code,name,notional,book_value' %}
+            <div>
+              <label for="{{ field.id_for_label }}" class="block text-xs font-medium text-slate-600 mb-1">
+                {{ field.label }}{% if field.field.required %} <span class="text-red-500">*</span>{% endif %}
+              </label>
+              {{ field }}
+              {% if field.help_text %}<div class="text-[11px] text-slate-400 mt-1">{{ field.help_text }}</div>{% endif %}
+              {% if field.errors %}<div class="text-xs text-red-600 mt-1">{{ field.errors|striptags }}</div>{% endif %}
+            </div>
+          {% endif %}
+        {% endfor %}
+      </div>
+
+      {# ── 종류별 구조화 입력 ── #}
+      <div class="pt-4 mt-2 border-t border-slate-200">
+        <h4 class="text-sm font-semibold mb-3 flex items-center gap-2">
+          <i class="bi bi-sliders"></i> 종류별 입력값
+          <span id="kind-hint" class="ml-2 text-xs font-normal text-slate-500"></span>
+        </h4>
+
+        {# STOCK #}
+        <div class="kind-group grid grid-cols-3 gap-4" data-kind="STOCK">
+          <div>
+            <label class="block text-xs font-medium text-slate-600 mb-1">{{ form.current_price.label }}</label>
+            {{ form.current_price }}
+            {% if form.current_price.errors %}<div class="text-xs text-red-600 mt-1">{{ form.current_price.errors|striptags }}</div>{% endif %}
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-600 mb-1">{{ form.shares.label }}</label>
+            {{ form.shares }}
+            {% if form.shares.errors %}<div class="text-xs text-red-600 mt-1">{{ form.shares.errors|striptags }}</div>{% endif %}
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-600 mb-1">{{ form.volatility.label }} <span class="text-red-500">*</span></label>
+            {{ form.volatility }}
+            <div class="text-[11px] text-slate-400 mt-1">파라메트릭 VaR 계산 입력</div>
+          </div>
+        </div>
+
+        {# BOND #}
+        <div class="kind-group grid grid-cols-2 gap-4" data-kind="BOND">
+          <div>
+            <label class="block text-xs font-medium text-slate-600 mb-1">{{ form.par.label }} <span class="text-red-500">*</span></label>
+            {{ form.par }}
+            {% if form.par.errors %}<div class="text-xs text-red-600 mt-1">{{ form.par.errors|striptags }}</div>{% endif %}
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-600 mb-1">{{ form.coupon_rate.label }} <span class="text-red-500">*</span></label>
+            {{ form.coupon_rate }}
+            {% if form.coupon_rate.errors %}<div class="text-xs text-red-600 mt-1">{{ form.coupon_rate.errors|striptags }}</div>{% endif %}
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-600 mb-1">{{ form.ytm.label }} <span class="text-red-500">*</span></label>
+            {{ form.ytm }}
+            {% if form.ytm.errors %}<div class="text-xs text-red-600 mt-1">{{ form.ytm.errors|striptags }}</div>{% endif %}
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-600 mb-1">{{ form.maturity_years.label }} <span class="text-red-500">*</span></label>
+            {{ form.maturity_years }}
+            {% if form.maturity_years.errors %}<div class="text-xs text-red-600 mt-1">{{ form.maturity_years.errors|striptags }}</div>{% endif %}
+          </div>
+        </div>
+
+        {# DERIV #}
+        <div class="kind-group grid grid-cols-3 gap-4" data-kind="DERIV">
+          <div>
+            <label class="block text-xs font-medium text-slate-600 mb-1">{{ form.volatility.label }} <span class="text-red-500">*</span></label>
+            {{ form.volatility }}
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-600 mb-1">{{ form.leverage.label }} <span class="text-red-500">*</span></label>
+            {{ form.leverage }}
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-600 mb-1">{{ form.base_price.label }}</label>
+            {{ form.base_price }}
+          </div>
+        </div>
+
+        {# PROJECT #}
+        <div class="kind-group grid grid-cols-2 gap-4" data-kind="PROJECT">
+          <div>
+            <label class="block text-xs font-medium text-slate-600 mb-1">{{ form.discount_rate.label }} <span class="text-red-500">*</span></label>
+            {{ form.discount_rate }}
+            {% if form.discount_rate.errors %}<div class="text-xs text-red-600 mt-1">{{ form.discount_rate.errors|striptags }}</div>{% endif %}
+          </div>
+          <div class="col-span-2">
+            <label class="block text-xs font-medium text-slate-600 mb-1">{{ form.cashflows_text.label }} <span class="text-red-500">*</span></label>
+            {{ form.cashflows_text }}
+            <div class="text-[11px] text-slate-400 mt-1">{{ form.cashflows_text.help_text }}</div>
+            {% if form.cashflows_text.errors %}<div class="text-xs text-red-600 mt-1">{{ form.cashflows_text.errors|striptags }}</div>{% endif %}
+          </div>
+        </div>
       </div>
 
       <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
@@ -31,5 +115,34 @@
         </button>
       </div>
     </form>
+
+    <div class="mt-3 text-[11px] text-slate-500 bg-slate-50 border border-slate-200 rounded p-3">
+      <div class="font-semibold mb-1">종류별 안내</div>
+      <ul class="space-y-0.5">
+        {% for k, hint in kind_hints.items %}
+          <li><b class="text-slate-700">{{ k }}</b> — {{ hint }}</li>
+        {% endfor %}
+      </ul>
+    </div>
   </div>
+
+  <script id="kind-hints-json" type="application/json">{{ kind_hints_json|safe }}</script>
+  <script>
+    (function () {
+      const kindSel = document.querySelector('[name=kind]');
+      if (!kindSel) return;
+      const hints = JSON.parse(document.getElementById('kind-hints-json').textContent);
+      const hintEl = document.getElementById('kind-hint');
+
+      function updateKindFields() {
+        const kind = kindSel.value;
+        document.querySelectorAll('.kind-group').forEach(el => {
+          el.style.display = el.dataset.kind === kind ? '' : 'none';
+        });
+        if (hintEl) hintEl.textContent = hints[kind] || '';
+      }
+      kindSel.addEventListener('change', updateKindFields);
+      updateKindFields();
+    })();
+  </script>
 {% endblock %}

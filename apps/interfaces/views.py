@@ -1,3 +1,4 @@
+import json
 from datetime import timedelta
 
 from django.contrib import messages
@@ -11,6 +12,7 @@ from django.views.decorators.http import require_POST
 from .forms import PROTOCOL_CONFIG_HINTS, InterfaceForm
 from .models import Interface, InterfaceLog
 from .protocols import execute_interface
+from .utils import mask_config
 
 
 def _stub(request, template, title, subtitle):
@@ -26,14 +28,43 @@ def interface_list(request):
     if protocol:
         qs = qs.filter(protocol=protocol)
 
+    total = qs.count()
+    paginator = Paginator(qs, 25)
+    page_obj = paginator.get_page(request.GET.get('page'))
+
+    base_qs = '&'.join(f'{k}={v}' for k, v in [('q', q), ('protocol', protocol)] if v)
+
     return render(request, 'interfaces/list.html', {
         'page_title': '인터페이스 관리',
         'page_subtitle': '인터페이스 통합관리 / 등록 · 설정',
-        'interfaces': qs,
+        'page_obj': page_obj,
+        'interfaces': page_obj.object_list,
         'q': q,
         'protocol': protocol,
         'protocol_choices': Interface.Protocol.choices,
-        'total': qs.count(),
+        'total': total,
+        'base_qs': base_qs,
+    })
+
+
+def interface_detail(request, pk):
+    obj = get_object_or_404(Interface, pk=pk)
+    logs_qs = obj.logs.order_by('-executed_at')
+    recent_logs = list(logs_qs[:20])
+    total = logs_qs.count()
+    success = logs_qs.filter(status=InterfaceLog.Status.SUCCESS).count()
+    success_rate = round(success / total * 100, 1) if total else 0.0
+    avg_latency = logs_qs.filter(latency_ms__isnull=False).aggregate(a=Avg('latency_ms'))['a'] or 0
+    return render(request, 'interfaces/detail.html', {
+        'page_title': f'인터페이스 상세 — {obj.code}',
+        'page_subtitle': obj.name,
+        'obj': obj,
+        'config_masked': mask_config(obj.config_json or {}),
+        'recent_logs': recent_logs,
+        'kpi': {
+            'total': total, 'success': success, 'fail': total - success,
+            'success_rate': success_rate, 'avg_latency': round(avg_latency),
+        },
     })
 
 
@@ -53,6 +84,7 @@ def interface_create(request):
         'mode': 'create',
         'protocol_config_hints': PROTOCOL_CONFIG_HINTS,
         'protocol_operations': Interface.PROTOCOL_OPERATIONS,
+        'protocol_hints_json': json.dumps(PROTOCOL_CONFIG_HINTS, ensure_ascii=False),
     })
 
 
@@ -74,6 +106,7 @@ def interface_update(request, pk):
         'obj': obj,
         'protocol_config_hints': PROTOCOL_CONFIG_HINTS,
         'protocol_operations': Interface.PROTOCOL_OPERATIONS,
+        'protocol_hints_json': json.dumps(PROTOCOL_CONFIG_HINTS, ensure_ascii=False),
     })
 
 
@@ -142,6 +175,47 @@ def log_retry(request, pk):
     else:
         messages.error(request, f'"{original.interface.code}" 재처리 실패: {log.error}')
     return redirect(request.META.get('HTTP_REFERER') or 'interfaces:execute')
+
+
+@require_POST
+def log_retry_bulk(request):
+    """여러 실패 로그 일괄 재처리.
+
+    - log_ids (리스트): 체크박스 선택
+    - scope=all: 현재 실패 로그 전부 (최대 100건)
+    """
+    ids = request.POST.getlist('log_ids')
+    scope = request.POST.get('scope', '')
+    if scope == 'all':
+        originals = InterfaceLog.objects.filter(status=InterfaceLog.Status.FAIL).order_by('-executed_at')[:100]
+    else:
+        if not ids:
+            messages.warning(request, '재처리할 로그를 선택하세요.')
+            return redirect('interfaces:execute')
+        originals = InterfaceLog.objects.filter(pk__in=ids, status=InterfaceLog.Status.FAIL)
+
+    # 동일 인터페이스 중복 호출 제거 (실패 로그 여러 건이 같은 iface 를 가리킬 수 있음)
+    seen = set()
+    targets = []
+    for log in originals:
+        if log.interface_id in seen:
+            continue
+        seen.add(log.interface_id)
+        targets.append(log.interface)
+
+    if not targets:
+        messages.warning(request, '재처리 대상이 없습니다.')
+        return redirect('interfaces:execute')
+
+    ok, fail = 0, 0
+    for iface in targets:
+        new_log = execute_interface(iface)
+        if new_log.status == InterfaceLog.Status.SUCCESS:
+            ok += 1
+        else:
+            fail += 1
+    messages.success(request, f'일괄 재처리 완료 — 성공 {ok}건, 실패 {fail}건 (인터페이스 {len(targets)}개)')
+    return redirect('interfaces:execute')
 
 
 PERIODS = {

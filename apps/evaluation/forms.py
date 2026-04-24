@@ -28,25 +28,75 @@ class PortfolioForm(forms.ModelForm):
         }
 
 
-# kind 별 권장 metrics_json 입력
+# 참고용 힌트 (템플릿 상단 안내)
 KIND_HINTS = {
-    'STOCK':   '예: {"volatility": 0.30}',
-    'BOND':    '예: {"coupon_rate": 0.05, "ytm": 0.045, "maturity_years": 5, "par": 1000000}',
-    'DERIV':   '예: {"volatility": 0.45, "leverage": 3}',
-    'PROJECT': '예: {"discount_rate": 0.10, "cashflows": [-1000000000, 300000000, 400000000, 500000000]}',
+    'STOCK':   '현재가 × 수량 = 평가액. 변동성(σ)은 파라메트릭 VaR 계산용',
+    'BOND':    'par/쿠폰/YTM/만기로 가격·Duration·Convexity 계산',
+    'DERIV':   'notional × 레버리지 = 실효노출. 변동성으로 VaR 산출',
+    'PROJECT': '현금흐름 리스트와 할인율로 NPV/IRR 계산 (t=0 투자 음수)',
 }
 
 
 class FinancialProductForm(forms.ModelForm):
-    metrics_json_text = forms.CharField(
-        label='지표 입력 (JSON)',
-        required=False,
+    """상품 등록/수정 — kind 별 구조화 입력 (metrics_json 은 clean 에서 재조립)"""
+
+    # STOCK
+    current_price = forms.DecimalField(
+        label='현재가', required=False, max_digits=18, decimal_places=4,
+        widget=forms.NumberInput(attrs={'class': INPUT_CLS, 'step': '0.0001', 'placeholder': '72000'}),
+    )
+    shares = forms.IntegerField(
+        label='보유 수량(주)', required=False, min_value=0,
+        widget=forms.NumberInput(attrs={'class': INPUT_CLS, 'placeholder': '예: 8000'}),
+    )
+
+    # STOCK + DERIV 공용
+    volatility = forms.DecimalField(
+        label='연 변동성 σ', required=False, max_digits=10, decimal_places=4,
+        widget=forms.NumberInput(attrs={'class': INPUT_CLS, 'step': '0.01', 'placeholder': '예: 0.25'}),
+    )
+
+    # BOND
+    par = forms.DecimalField(
+        label='액면가 (par)', required=False, max_digits=18, decimal_places=2,
+        widget=forms.NumberInput(attrs={'class': INPUT_CLS, 'placeholder': '10000'}),
+    )
+    coupon_rate = forms.DecimalField(
+        label='쿠폰금리 (연)', required=False, max_digits=10, decimal_places=4,
+        widget=forms.NumberInput(attrs={'class': INPUT_CLS, 'step': '0.001', 'placeholder': '예: 0.045'}),
+    )
+    ytm = forms.DecimalField(
+        label='YTM (할인율)', required=False, max_digits=10, decimal_places=4,
+        widget=forms.NumberInput(attrs={'class': INPUT_CLS, 'step': '0.001', 'placeholder': '예: 0.041'}),
+    )
+    maturity_years = forms.DecimalField(
+        label='만기 (년)', required=False, max_digits=5, decimal_places=2,
+        widget=forms.NumberInput(attrs={'class': INPUT_CLS, 'step': '0.5', 'placeholder': '예: 5'}),
+    )
+
+    # DERIV
+    leverage = forms.DecimalField(
+        label='레버리지', required=False, max_digits=6, decimal_places=2,
+        widget=forms.NumberInput(attrs={'class': INPUT_CLS, 'step': '0.1', 'placeholder': '예: 3'}),
+    )
+    base_price = forms.DecimalField(
+        label='기준가 (시계열 생성용)', required=False, max_digits=18, decimal_places=4,
+        widget=forms.NumberInput(attrs={'class': INPUT_CLS, 'step': '0.01', 'placeholder': '100'}),
+    )
+
+    # PROJECT
+    discount_rate = forms.DecimalField(
+        label='할인율', required=False, max_digits=10, decimal_places=4,
+        widget=forms.NumberInput(attrs={'class': INPUT_CLS, 'step': '0.001', 'placeholder': '예: 0.10'}),
+    )
+    cashflows_text = forms.CharField(
+        label='현금흐름 (쉼표/줄바꿈 구분)', required=False,
         widget=forms.Textarea(attrs={
             'class': INPUT_CLS + ' font-mono text-xs',
-            'rows': 4,
-            'placeholder': '{}',
+            'rows': 3,
+            'placeholder': '-1000000000, 300000000, 400000000, 500000000',
         }),
-        help_text='kind 에 맞는 입력값을 JSON 으로 작성합니다. (비우면 기본값 사용)',
+        help_text='t=0 (투자) 음수 + t=1..N (회수) 양수 순서. 총 2개 이상.',
     )
 
     class Meta:
@@ -64,22 +114,75 @@ class FinancialProductForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         if self.instance and self.instance.pk and self.instance.metrics_json:
-            self.fields['metrics_json_text'].initial = json.dumps(
-                self.instance.metrics_json, ensure_ascii=False, indent=2
-            )
+            m = self.instance.metrics_json or {}
+            mapping = [
+                'current_price', 'shares', 'volatility',
+                'par', 'coupon_rate', 'ytm', 'maturity_years',
+                'leverage', 'base_price',
+                'discount_rate',
+            ]
+            for k in mapping:
+                if k in m and m[k] is not None:
+                    self.fields[k].initial = m[k]
+            cfs = m.get('cashflows')
+            if cfs:
+                self.fields['cashflows_text'].initial = ', '.join(
+                    f'{int(c)}' if float(c).is_integer() else str(c) for c in cfs
+                )
 
-    def clean_metrics_json_text(self):
-        raw = self.cleaned_data.get('metrics_json_text', '').strip()
-        if not raw:
-            return {}
-        try:
-            return json.loads(raw)
-        except json.JSONDecodeError as e:
-            raise forms.ValidationError(f'JSON 파싱 실패: {e}')
+    def clean(self):
+        cleaned = super().clean()
+        kind = cleaned.get('kind')
+        metrics = {}
+
+        def f(name):
+            v = cleaned.get(name)
+            return float(v) if v is not None else None
+
+        if kind == FinancialProduct.Kind.STOCK:
+            if f('current_price') is not None:
+                metrics['current_price'] = f('current_price')
+            if cleaned.get('shares') is not None:
+                metrics['shares'] = int(cleaned['shares'])
+            metrics['volatility'] = f('volatility') or 0.30
+
+        elif kind == FinancialProduct.Kind.BOND:
+            missing = [
+                self.fields[fn].label for fn in ('par', 'coupon_rate', 'ytm', 'maturity_years')
+                if cleaned.get(fn) is None
+            ]
+            if missing:
+                raise forms.ValidationError(f'채권 필수값 누락: {", ".join(missing)}')
+            metrics['par'] = f('par')
+            metrics['coupon_rate'] = f('coupon_rate')
+            metrics['ytm'] = f('ytm')
+            metrics['maturity_years'] = f('maturity_years')
+
+        elif kind == FinancialProduct.Kind.DERIV:
+            metrics['volatility'] = f('volatility') or 0.45
+            metrics['leverage'] = f('leverage') or 1
+            if f('base_price') is not None:
+                metrics['base_price'] = f('base_price')
+
+        elif kind == FinancialProduct.Kind.PROJECT:
+            metrics['discount_rate'] = f('discount_rate') or 0.10
+            raw = (cleaned.get('cashflows_text') or '').strip()
+            if not raw:
+                raise forms.ValidationError('프로젝트는 현금흐름 필수 입력')
+            try:
+                cfs = [float(x.strip()) for x in raw.replace('\n', ',').split(',') if x.strip()]
+            except ValueError as e:
+                raise forms.ValidationError(f'현금흐름 파싱 실패: {e}')
+            if len(cfs) < 2:
+                raise forms.ValidationError('현금흐름은 최소 2개 (t=0 투자 + t≥1 회수)')
+            metrics['cashflows'] = cfs
+
+        self._metrics = metrics
+        return cleaned
 
     def save(self, commit=True):
         obj = super().save(commit=False)
-        obj.metrics_json = self.cleaned_data.get('metrics_json_text') or {}
+        obj.metrics_json = getattr(self, '_metrics', obj.metrics_json or {})
         if commit:
             obj.save()
         return obj

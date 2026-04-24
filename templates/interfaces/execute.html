@@ -86,41 +86,86 @@
       </table>
     </div>
   {% else %}
-    <div class="bg-white rounded-lg border border-slate-200">
-      <div class="p-4 border-b border-slate-200">
-        <h3 class="font-semibold text-sm">최근 실패 로그</h3>
-        <p class="text-xs text-slate-500 mt-1">실패한 호출을 동일 인터페이스로 재실행합니다. 새 로그가 생성되며 원본은 보존됩니다.</p>
-      </div>
-      <table class="w-full text-sm">
-        <thead class="bg-slate-50 text-xs text-slate-500">
-          <tr>
-            <th class="text-left px-4 py-2 font-medium">시각</th>
-            <th class="text-left px-4 py-2 font-medium">인터페이스</th>
-            <th class="text-left px-4 py-2 font-medium">에러</th>
-            <th class="text-right px-4 py-2 font-medium"></th>
-          </tr>
-        </thead>
-        <tbody class="divide-y divide-slate-100">
-          {% for log in failed_logs %}
-            <tr class="hover:bg-slate-50">
-              <td class="px-4 py-2 text-xs text-slate-500 whitespace-nowrap">{{ log.executed_at|date:"Y-m-d H:i:s" }}</td>
-              <td class="px-4 py-2 font-mono text-xs">{{ log.interface.code }}</td>
-              <td class="px-4 py-2 text-xs text-red-600 truncate max-w-md">{{ log.error|default:"-" }}</td>
-              <td class="px-4 py-2 text-right whitespace-nowrap">
-                <a href="{% url 'interfaces:log_detail' log.pk %}" class="text-xs text-slate-500 hover:underline mr-2">상세</a>
-                <form method="post" action="{% url 'interfaces:log_retry' log.pk %}" class="inline">
-                  {% csrf_token %}
-                  <button type="submit" class="text-xs px-3 py-1 bg-amber-500 text-white rounded hover:bg-amber-600">
-                    <i class="bi bi-arrow-clockwise"></i> 재처리
-                  </button>
-                </form>
-              </td>
+    <form method="post" action="{% url 'interfaces:log_retry_bulk' %}" id="bulk-retry-form">
+      {% csrf_token %}
+      <div class="bg-white rounded-lg border border-slate-200">
+        <div class="p-4 border-b border-slate-200 flex items-center justify-between gap-3">
+          <div>
+            <h3 class="font-semibold text-sm">최근 실패 로그</h3>
+            <p class="text-xs text-slate-500 mt-1">선택한 건만 재처리하거나 전체 실패 건을 한 번에 재시도합니다. 동일 인터페이스 중복은 자동 병합됩니다.</p>
+          </div>
+          {% if failed_logs %}
+            <div class="flex items-center gap-2">
+              <button type="submit"
+                      class="text-xs px-3 py-1.5 bg-amber-500 text-white rounded hover:bg-amber-600 disabled:opacity-50"
+                      id="bulk-retry-selected" disabled>
+                <i class="bi bi-arrow-clockwise"></i> 선택 재처리 <span id="selected-count"></span>
+              </button>
+              <button type="submit" name="scope" value="all"
+                      onclick="return confirm('실패 로그 전체를 재시도합니다. 계속하시겠습니까?');"
+                      class="text-xs px-3 py-1.5 bg-red-600 text-white rounded hover:bg-red-700">
+                <i class="bi bi-arrow-clockwise"></i> 전체 재시도 ({{ failed_count }})
+              </button>
+            </div>
+          {% endif %}
+        </div>
+        <table class="w-full text-sm">
+          <thead class="bg-slate-50 text-xs text-slate-500">
+            <tr>
+              <th class="px-4 py-2 w-10">
+                <input type="checkbox" id="select-all" class="w-4 h-4" />
+              </th>
+              <th class="text-left px-4 py-2 font-medium">시각</th>
+              <th class="text-left px-4 py-2 font-medium">인터페이스</th>
+              <th class="text-left px-4 py-2 font-medium">에러</th>
+              <th class="text-right px-4 py-2 font-medium"></th>
             </tr>
-          {% empty %}
-            <tr><td colspan="4" class="text-center text-slate-400 py-10 text-sm">실패한 로그가 없습니다.</td></tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
+          </thead>
+          <tbody class="divide-y divide-slate-100">
+            {% for log in failed_logs %}
+              <tr class="hover:bg-slate-50">
+                <td class="px-4 py-2">
+                  <input type="checkbox" name="log_ids" value="{{ log.pk }}" class="retry-cb w-4 h-4" />
+                </td>
+                <td class="px-4 py-2 text-xs text-slate-500 whitespace-nowrap">{{ log.executed_at|date:"Y-m-d H:i:s" }}</td>
+                <td class="px-4 py-2 font-mono text-xs">
+                  <a href="{% url 'interfaces:detail' log.interface.pk %}" class="text-blue-700 hover:underline">{{ log.interface.code }}</a>
+                </td>
+                <td class="px-4 py-2 text-xs text-red-600 truncate max-w-md">{{ log.error|default:"-" }}</td>
+                <td class="px-4 py-2 text-right whitespace-nowrap">
+                  <a href="{% url 'interfaces:log_detail' log.pk %}" class="text-xs text-slate-500 hover:underline mr-2">상세</a>
+                </td>
+              </tr>
+            {% empty %}
+              <tr><td colspan="5" class="text-center text-slate-400 py-10 text-sm">실패한 로그가 없습니다.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </form>
+
+    <script>
+      (function () {
+        const selectAll = document.getElementById('select-all');
+        const checkboxes = document.querySelectorAll('.retry-cb');
+        const btn = document.getElementById('bulk-retry-selected');
+        const count = document.getElementById('selected-count');
+        if (!btn) return;
+
+        function update() {
+          const n = document.querySelectorAll('.retry-cb:checked').length;
+          btn.disabled = n === 0;
+          count.textContent = n ? '(' + n + ')' : '';
+        }
+        if (selectAll) {
+          selectAll.addEventListener('change', () => {
+            checkboxes.forEach(cb => { cb.checked = selectAll.checked; });
+            update();
+          });
+        }
+        checkboxes.forEach(cb => cb.addEventListener('change', update));
+        update();
+      })();
+    </script>
   {% endif %}
 {% endblock %}
