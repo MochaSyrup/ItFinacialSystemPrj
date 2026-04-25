@@ -1,0 +1,24 @@
+# Caddy 설정 — 자동 HTTPS (Let's Encrypt)
+# DOMAIN 환경변수: 도메인 보유 시 portal.example.com,
+# 없으면 sslip.io 트릭으로 <ELASTIC_IP>.sslip.io (예: 54.180.123.45.sslip.io)
+
+{$DOMAIN} {
+	encode gzip
+
+	# Django static 은 web 컨테이너 안 whitenoise 가 처리하므로 그대로 위임
+	reverse_proxy web:8000 {
+		header_up X-Forwarded-Proto {scheme}
+		header_up X-Forwarded-Host {host}
+		header_up X-Real-IP {remote_host}
+	}
+
+	# 보안 헤더
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		# Django 가 자체 CSRF 처리하므로 CSP 는 보수적으로
+		-Server
+	}
+}

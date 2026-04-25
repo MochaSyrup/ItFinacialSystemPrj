@@ -3,6 +3,11 @@ djangorestframework==3.15.2
 drf-spectacular==0.28.0
 django-htmx==1.19.0
 
+# 운영 (gunicorn + 정적파일 + PostgreSQL 드라이버)
+gunicorn==23.0.0
+whitenoise==6.8.2
+psycopg2-binary==2.9.10
+
 # 실제 프로토콜 어댑터 (INTERFACE_LIVE_MODE=True 일 때 사용)
 # 미설치 상태에서는 lazy-import 가 실패 → Mock 으로 자동 폴백
 requests==2.32.3

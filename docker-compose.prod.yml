@@ -1,0 +1,48 @@
+# 운영 overlay
+# 사용법:
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+#
+# 변경점:
+#   1) Caddy 컨테이너 추가 — 80/443 포트 노출, Let's Encrypt 자동 HTTPS
+#   2) web 의 8000 포트 외부 노출 제거 (Caddy 가 내부 reverse_proxy)
+#   3) restart: unless-stopped — 재부팅 시 자동 기동
+#   4) postgres/redis 도 외부 노출 안 함 (compose 내부 네트워크만)
+
+services:
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"     # HTTP/3
+    environment:
+      DOMAIN: ${DOMAIN}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - web
+
+  web:
+    restart: unless-stopped
+    ports: !reset []        # 8000 직접 노출 제거 — Caddy 만 외부 통신
+    expose:
+      - "8000"
+
+  worker:
+    restart: unless-stopped
+
+  beat:
+    restart: unless-stopped
+
+  postgres:
+    restart: unless-stopped
+
+  redis:
+    restart: unless-stopped
+
+volumes:
+  caddy_data:
+  caddy_config:

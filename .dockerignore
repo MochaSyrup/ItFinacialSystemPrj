@@ -1,0 +1,39 @@
+# Python
+__pycache__
+*.py[cod]
+*.egg-info
+.pytest_cache
+
+# Virtual env
+venv/
+.venv/
+env/
+
+# Django
+*.log
+db.sqlite3
+db.sqlite3-journal
+staticfiles/
+media/
+
+# Env / secrets
+.env
+.env.*
+!.env.example
+
+# Git / CI / IDE
+.git
+.github
+.idea
+.vscode
+.DS_Store
+Thumbs.db
+
+# Claude Code 메타
+.claude/
+CLAUDE.md
+
+# 컨테이너 메타 자기 자신
+Dockerfile
+docker-compose.yml
+.dockerignore

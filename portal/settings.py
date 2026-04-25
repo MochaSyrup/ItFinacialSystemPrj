@@ -10,6 +10,7 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.1/ref/settings/
 """
 
+import os
 from pathlib import Path
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -20,12 +21,42 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/5.1/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-p%z&a+$u!3$7t4v$x023%=^+_1nfg*nq8b@o-q*ysoaxgi4k4p'
+SECRET_KEY = os.environ.get(
+    'DJANGO_SECRET_KEY',
+    'django-insecure-p%z&a+$u!3$7t4v$x023%=^+_1nfg*nq8b@o-q*ysoaxgi4k4p',
+)
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = os.environ.get('DJANGO_DEBUG', 'True').lower() == 'true'
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = [
+    h.strip()
+    for h in os.environ.get('DJANGO_ALLOWED_HOSTS', 'localhost,127.0.0.1,0.0.0.0,web').split(',')
+    if h.strip()
+]
+
+# CSRF 신뢰 origin — 운영 도메인을 https 스킴 포함해서 지정
+# 예: DJANGO_CSRF_TRUSTED_ORIGINS=https://portal.example.com,https://54.180.1.2.sslip.io
+CSRF_TRUSTED_ORIGINS = [
+    o.strip()
+    for o in os.environ.get('DJANGO_CSRF_TRUSTED_ORIGINS', '').split(',')
+    if o.strip()
+]
+
+# 리버스 프록시(Caddy) 뒤에서 실제 스킴 인식
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+
+# 운영 모드(DEBUG=False) 일 때 보안 헤더/쿠키 자동 강화
+if not DEBUG:
+    SECURE_SSL_REDIRECT = os.environ.get('DJANGO_SECURE_SSL_REDIRECT', 'True').lower() == 'true'
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    SECURE_HSTS_SECONDS = int(os.environ.get('DJANGO_HSTS_SECONDS', '0'))  # 처음엔 0 권장, 안정 후 31536000
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_HSTS_PRELOAD = False
+    SECURE_CONTENT_TYPE_NOSNIFF = True
+    SECURE_REFERRER_POLICY = 'strict-origin-when-cross-origin'
+    X_FRAME_OPTIONS = 'DENY'
 
 
 # Application definition
@@ -52,6 +83,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -86,12 +118,24 @@ WSGI_APPLICATION = 'portal.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/5.1/ref/settings/#databases
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+if os.environ.get('POSTGRES_HOST'):
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.postgresql',
+            'NAME': os.environ.get('POSTGRES_DB', 'portal'),
+            'USER': os.environ.get('POSTGRES_USER', 'portal'),
+            'PASSWORD': os.environ.get('POSTGRES_PASSWORD', 'portal'),
+            'HOST': os.environ.get('POSTGRES_HOST', 'postgres'),
+            'PORT': os.environ.get('POSTGRES_PORT', '5432'),
+        }
     }
-}
+else:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
+        }
+    }
 
 
 # Password validation
@@ -130,6 +174,8 @@ USE_TZ = True
 
 STATIC_URL = 'static/'
 STATICFILES_DIRS = [BASE_DIR / 'static']
+STATIC_ROOT = BASE_DIR / 'staticfiles'
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
 
 # Default primary key field type
@@ -155,11 +201,10 @@ INTERFACE_RETRY_BACKOFF = 0.5         # 재시도 대기 (초, 지수 증가)
 
 # ── Celery / Beat ─────────────────────────────────────────
 # broker/backend 는 환경변수로 덮어쓸 수 있음 (docker-compose 에서 redis://redis:6379 로 연결)
-import os as _os
 from celery.schedules import crontab as _crontab
 
-CELERY_BROKER_URL = _os.environ.get('CELERY_BROKER_URL', 'redis://localhost:6379/0')
-CELERY_RESULT_BACKEND = _os.environ.get('CELERY_RESULT_BACKEND', 'redis://localhost:6379/1')
+CELERY_BROKER_URL = os.environ.get('CELERY_BROKER_URL', 'redis://localhost:6379/0')
+CELERY_RESULT_BACKEND = os.environ.get('CELERY_RESULT_BACKEND', 'redis://localhost:6379/1')
 CELERY_TIMEZONE = TIME_ZONE
 CELERY_ENABLE_UTC = False
 CELERY_TASK_SERIALIZER = 'json'
@@ -168,7 +213,8 @@ CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SOFT_TIME_LIMIT = 600
 CELERY_TASK_TIME_LIMIT = 900
 # 테스트/개발 환경에서 broker 없이도 작업이 인라인 실행되도록
-CELERY_TASK_ALWAYS_EAGER = _os.environ.get('CELERY_TASK_ALWAYS_EAGER', 'True').lower() == 'true'
+# Docker 환경(CELERY_BROKER_URL 명시)에서는 기본 False 로 동작
+CELERY_TASK_ALWAYS_EAGER = os.environ.get('CELERY_TASK_ALWAYS_EAGER', 'True').lower() == 'true'
 CELERY_TASK_EAGER_PROPAGATES = True
 
 CELERY_BEAT_SCHEDULE = {
