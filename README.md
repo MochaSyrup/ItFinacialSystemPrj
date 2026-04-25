@@ -83,8 +83,9 @@ ClaudePrject/
 │   ├── evaluation/       # 금융상품 평가 + 원가/관리회계
 │   │   ├── metrics.py      # VaR / Duration / NPV / IRR / Historical VaR 계산
 │   │   ├── stress.py       # 스트레스 테스트 엔진 (금리/주가/변동성 쇼크)
-│   │   ├── costing.py      # 월 인건비 안분 + 표준원가 배분 엔진
-│   │   ├── models.py       # Portfolio·Product·PriceHistory + Division·Department·Employee·Project·CostEntry·RevenueEntry·AllocationRule 등
+│   │   ├── costing.py      # 인건비 안분·배분 엔진·FiscalPeriod 마감/재개
+│   │   ├── tasks.py        # Celery: 인건비 안분, 시세 스냅샷
+│   │   ├── models.py       # Portfolio·Product·PriceHistory + Division·Department·Employee·Project·CostEntry·RevenueEntry·AllocationRule·FiscalPeriod
 │   │   └── management/commands/
 │   │       ├── seed_costing_master.py         # 5본부/15부서/50명/20프로젝트 시드
 │   │       ├── seed_costing_transactions.py   # 4개월치 원가/매출/배분 트랜잭션 시드
@@ -92,12 +93,16 @@ ClaudePrject/
 │   │       ├── seed_market_data.py            # 3포트폴리오×~30상품 + 365일 시세 히스토리
 │   │       └── allocate_salary.py             # 월 인건비 안분 CLI
 │   ├── interfaces/       # 인터페이스 통합관리
-│   │   ├── protocols/      # REST/SOAP/MQ/SFTP/BATCH 어댑터
+│   │   ├── protocols/      # REST/SOAP/MQ/SFTP/BATCH 어댑터 (Mock + Live)
 │   │   ├── forms.py        # 프로토콜별 구조화 폼 + cron validator
 │   │   ├── utils.py        # 민감 키 마스킹 (mask_config)
+│   │   ├── tasks.py        # Celery: dispatch_interfaces / run_interface / cleanup_old_logs
 │   │   └── models.py       # Interface, InterfaceLog
 │   └── monitoring/       # 대시보드
 ├── portal/               # Django 프로젝트 설정
+│   ├── celery.py           # Celery 앱 부트스트랩
+│   ├── settings.py
+│   └── urls.py
 ├── templates/            # Django 템플릿 (costing_*.html, allocation_*.html 포함)
 ├── static/               # CSS/JS
 ├── mockup/               # UI 목업
@@ -228,10 +233,16 @@ celery -A portal beat -l info          # 스케줄러
 - 반환: 포트폴리오 base/stressed 평가액, Δ금액/%, VaR 증가분, 상품별 기여도
 
 ### 원가 엔진 (`apps/evaluation/costing.py`)
-- `allocate_monthly_salary(period, reset=False)` — 월 인건비 자동 안분
+- `allocate_monthly_salary(period, reset=False)` — 월 인건비 자동 안분 (마감 기간이면 `PeriodClosedError`)
 - `simulate_allocation(rule, period)` — 배분 시뮬 (`AllocationRun(SIMULATED)` + `AllocationResult` 생성, 원장 미변경)
 - `commit_allocation(run)` — 확정 → 결과별 `CostEntry(source=ALLOCATION)` + 출발부서 상쇄 entry 생성
 - `reverse_allocation(run)` — 확정 취소 → 생성된 CostEntry 전부 삭제
+- `close_period(period)` / `reopen_period(period)` — 회계 기간 마감/재개 (`FiscalPeriod` 업서트, 감사 메타 기록)
+- `period_summary(period)` — 마감 화면용 요약 (원장 건수·금액 + 마감 상태)
+
+### 테스트 커버리지 (67건, `python manage.py test`)
+- **interfaces (25)** — cron validator, mask_config, 폼 round-trip, 일괄 재시도, 페이징, 어댑터 dispatch(Mock/Live), 응답 truncation, Celery dispatch (cron 매칭/비매칭), cleanup
+- **evaluation (42)** — FiscalPeriod 마감/재개, CostEntry immutable, RevenueEntry 가드, 배분 확정 차단, metrics(NPV/IRR/Duration/Convexity/VaR/Historical VaR), compute/aggregate, 인건비 안분 비율, **배분 보존 법칙** (commit/reverse 합계 불변), EQUAL driver 균등 분할, 7개 스트레스 시나리오 방향성 검증, Celery 태스크
 
 ### Driver 계산 로직
 | Driver | 기준 |
