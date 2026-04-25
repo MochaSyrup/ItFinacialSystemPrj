@@ -151,3 +151,40 @@ INTERFACE_BATCH_TIMEOUT = 3600        # BATCH 최대 실행 시간 (초)
 INTERFACE_RESPONSE_MAX_CHARS = 4000   # response/request summary 저장 길이 제한
 INTERFACE_RETRY_MAX = 1               # 실패 시 재시도 횟수 (0=재시도 없음)
 INTERFACE_RETRY_BACKOFF = 0.5         # 재시도 대기 (초, 지수 증가)
+
+
+# ── Celery / Beat ─────────────────────────────────────────
+# broker/backend 는 환경변수로 덮어쓸 수 있음 (docker-compose 에서 redis://redis:6379 로 연결)
+import os as _os
+from celery.schedules import crontab as _crontab
+
+CELERY_BROKER_URL = _os.environ.get('CELERY_BROKER_URL', 'redis://localhost:6379/0')
+CELERY_RESULT_BACKEND = _os.environ.get('CELERY_RESULT_BACKEND', 'redis://localhost:6379/1')
+CELERY_TIMEZONE = TIME_ZONE
+CELERY_ENABLE_UTC = False
+CELERY_TASK_SERIALIZER = 'json'
+CELERY_RESULT_SERIALIZER = 'json'
+CELERY_ACCEPT_CONTENT = ['json']
+CELERY_TASK_SOFT_TIME_LIMIT = 600
+CELERY_TASK_TIME_LIMIT = 900
+# 테스트/개발 환경에서 broker 없이도 작업이 인라인 실행되도록
+CELERY_TASK_ALWAYS_EAGER = _os.environ.get('CELERY_TASK_ALWAYS_EAGER', 'True').lower() == 'true'
+CELERY_TASK_EAGER_PROPAGATES = True
+
+CELERY_BEAT_SCHEDULE = {
+    # 매분: 활성 인터페이스 중 cron 이 현재 분에 걸리는 것을 trigger
+    'dispatch-scheduled-interfaces': {
+        'task': 'apps.interfaces.tasks.dispatch_interfaces',
+        'schedule': _crontab(minute='*'),
+    },
+    # 매일 18:00 KST: 시세 스냅샷 전진
+    'refresh-market-data-daily': {
+        'task': 'apps.evaluation.tasks.refresh_market_data',
+        'schedule': _crontab(minute=0, hour=18),
+    },
+    # 매월 1일 02:00: 전월 인건비 안분
+    'allocate-salary-monthly': {
+        'task': 'apps.evaluation.tasks.allocate_salary_previous_month',
+        'schedule': _crontab(minute=0, hour=2, day_of_month=1),
+    },
+}

@@ -238,3 +238,70 @@ class AdapterModeDispatchTests(TestCase):
             result = _Bloated().execute(iface)
         self.assertLess(len(result.response_summary), 1200)
         self.assertIn('truncated', result.response_summary)
+
+
+class CeleryDispatchTests(TestCase):
+    """dispatch_interfaces 가 cron 매칭으로만 trigger 하는지"""
+
+    def test_run_interface_skips_inactive(self):
+        from apps.interfaces.tasks import run_interface
+        iface = Interface.objects.create(
+            code='IF_OFF', name='off', protocol='REST', is_active=False,
+        )
+        result = run_interface.run(iface.pk)
+        self.assertTrue(result.get('skipped'))
+
+    def test_run_interface_creates_log(self):
+        from apps.interfaces.tasks import run_interface
+        iface = Interface.objects.create(
+            code='IF_ON', name='on', protocol='REST', is_active=True,
+        )
+        before = InterfaceLog.objects.count()
+        run_interface.run(iface.pk)
+        self.assertEqual(InterfaceLog.objects.count(), before + 1)
+
+    def test_dispatch_skips_when_no_cron_matches(self):
+        from apps.interfaces.tasks import dispatch_interfaces
+        # 2099 년에만 도는 cron — 현재 분에 절대 안 걸림
+        Interface.objects.create(
+            code='IF_FUTURE', name='f', protocol='REST',
+            is_active=True, schedule_cron='0 0 1 1 *',  # 매년 1월 1일 00:00
+        )
+        from datetime import datetime
+        from unittest.mock import patch
+        # 임의의 비매칭 시각 (3월 5일 14:23)
+        fake_now = datetime(2026, 3, 5, 14, 23, 17)
+        with patch('apps.interfaces.tasks.timezone.localtime', return_value=fake_now):
+            result = dispatch_interfaces.run()
+        # 매칭 안 됨 → dispatched 0
+        self.assertEqual(result['dispatched'], 0)
+
+    def test_dispatch_triggers_matching_cron(self):
+        from apps.interfaces.tasks import dispatch_interfaces
+        Interface.objects.create(
+            code='IF_HIT', name='h', protocol='REST',
+            is_active=True, schedule_cron='23 14 5 3 *',
+        )
+        from datetime import datetime
+        from unittest.mock import patch
+        fake_now = datetime(2026, 3, 5, 14, 23, 17)
+        with patch('apps.interfaces.tasks.timezone.localtime', return_value=fake_now):
+            result = dispatch_interfaces.run()
+        self.assertEqual(result['dispatched'], 1)
+        self.assertIn('IF_HIT', result['codes'])
+
+    def test_cleanup_old_logs(self):
+        from datetime import timedelta
+        from django.utils import timezone
+        from apps.interfaces.tasks import cleanup_old_logs
+        iface = Interface.objects.create(code='IF_C', name='c', protocol='REST')
+        old = InterfaceLog.objects.create(
+            interface=iface, status=InterfaceLog.Status.SUCCESS, request_summary='r',
+        )
+        InterfaceLog.objects.filter(pk=old.pk).update(executed_at=timezone.now() - timedelta(days=120))
+        InterfaceLog.objects.create(
+            interface=iface, status=InterfaceLog.Status.SUCCESS, request_summary='r',
+        )
+        result = cleanup_old_logs.run(keep_days=90)
+        self.assertEqual(result['deleted'], 1)
+        self.assertEqual(InterfaceLog.objects.count(), 1)
